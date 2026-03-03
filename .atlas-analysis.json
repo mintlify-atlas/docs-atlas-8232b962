@@ -1,0 +1,134 @@
+{
+  "projectType": "saas",
+  "projectName": "ZeroStarter",
+  "projectDescription": "A modern, type-safe, and high-performance SaaS starter template built with a monorepo architecture.",
+  "theme": "palm",
+  "primaryColor": "#3b82f6",
+  "lightColor": "#60a5fa",
+  "darkColor": "#2563eb",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "why-zerostarter"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "getting-started/installation",
+              "getting-started/quickstart",
+              "getting-started/architecture",
+              "getting-started/project-structure"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "core-concepts/monorepo",
+              "core-concepts/type-safe-api",
+              "core-concepts/authentication",
+              "core-concepts/database"
+            ]
+          },
+          {
+            "group": "Frontend",
+            "pages": [
+              "frontend/overview",
+              "frontend/routing",
+              "frontend/components",
+              "frontend/data-fetching",
+              "frontend/styling"
+            ]
+          },
+          {
+            "group": "Backend",
+            "pages": [
+              "backend/overview",
+              "backend/routing",
+              "backend/middleware",
+              "backend/validation"
+            ]
+          },
+          {
+            "group": "Database",
+            "pages": [
+              "database/schema",
+              "database/migrations",
+              "database/queries"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/authentication",
+              "features/analytics",
+              "features/api-documentation"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/scripts",
+              "development/environment-variables",
+              "development/code-quality",
+              "development/testing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Deployment",
+        "groups": [
+          {
+            "group": "Deployment Guides",
+            "pages": [
+              "deployment/overview",
+              "deployment/vercel",
+              "deployment/docker",
+              "deployment/production-checklist"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
+          {
+            "group": "Resources",
+            "pages": [
+              "resources/roadmap",
+              "resources/faq",
+              "resources/troubleshooting",
+              "resources/contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Monorepo architecture with Turborepo and Bun",
+    "End-to-end type safety with Hono RPC",
+    "Next.js 16 frontend with React 19",
+    "Hono backend API with OpenAPI documentation",
+    "PostgreSQL database with Drizzle ORM",
+    "Better Auth authentication with OAuth providers",
+    "Shadcn UI components with Tailwind CSS",
+    "PostHog analytics integration",
+    "Docker and Vercel deployment support"
+  ],
+  "publicApiSurface": [
+    "GET /api/health - Health check endpoint",
+    "GET /api/v1/session - Get current session",
+    "GET /api/v1/user - Get current user",
+    "POST /api/auth/sign-in - Sign in endpoint",
+    "POST /api/auth/sign-up - Sign up endpoint",
+    "apiClient - Type-safe API client for frontend"
+  ]
+}
