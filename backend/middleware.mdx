@@ -1,0 +1,283 @@
+---
+title: Middleware
+description: Middleware patterns for authentication, rate limiting, and CORS in ZeroStarter
+---
+
+## Middleware Architecture
+
+ZeroStarter uses Hono's middleware system for cross-cutting concerns. Middleware can be applied globally, to specific routes, or as router-level middleware.
+
+## Global Middleware
+
+Applied to all routes via wildcard pattern (`index.ts:16-28`):
+
+```typescript
+app.use(
+  "*",
+  cors({
+    origin: env.HONO_TRUSTED_ORIGINS,
+    allowHeaders: ["content-type", "authorization"],
+    allowMethods: ["GET", "OPTIONS", "POST", "PUT"],
+    exposeHeaders: ["content-length"],
+    maxAge: 600,
+    credentials: true,
+  }),
+  logger(),
+  rateLimiterMiddleware,
+)
+```
+
+### CORS Configuration
+
+The CORS middleware allows cross-origin requests from trusted origins:
+
+- **origin**: Comma-separated list from `HONO_TRUSTED_ORIGINS` environment variable
+- **allowHeaders**: Accepts `content-type` and `authorization` headers
+- **allowMethods**: Supports `GET`, `OPTIONS`, `POST`, `PUT`
+- **credentials**: Enables cookies and authentication headers
+- **maxAge**: Preflight cache duration (600 seconds)
+
+### Request Logger
+
+Hono's built-in logger middleware logs all requests and responses in development.
+
+## Rate Limiting Middleware
+
+ZeroStarter implements flexible rate limiting with IP, user, and API key support.
+
+### Configuration Function
+
+The `createRateLimiter` function creates configurable rate limiters (`middlewares/rate-limiter.ts:28-38`):
+
+```typescript
+export function createRateLimiter(config: RateLimiterConfig = {}) {
+  const { limit = 60, windowMs = 60000, getUserId, getApiKey } = config
+
+  return rateLimiter({
+    limit,
+    windowMs,
+    keyGenerator: (c) => generateRateLimitKey(c, getUserId, getApiKey),
+    handler: (c) =>
+      c.json({ error: { code: "TOO_MANY_REQUESTS", message: "Too Many Requests" } }, 429),
+  })
+}
+```
+
+### Key Generation Strategy
+
+Rate limit keys are generated with fallback priority (`middlewares/rate-limiter.ts:7-19`):
+
+```typescript
+function generateRateLimitKey(
+  c: Context,
+  getUserId?: (c: Context) => string | undefined,
+  getApiKey?: (c: Context) => string | undefined,
+): string {
+  const userId = getUserId?.(c)
+  if (userId) return `userid:${userId}`
+
+  const apiKey = getApiKey?.(c)
+  if (apiKey) return `apikey:${hash(apiKey).toString(16)}`
+
+  return `ip:${findIp(c.req.raw) || randomUUIDv7()}`
+}
+```
+
+**Priority order:**
+1. User ID (if authenticated)
+2. API key (if provided)
+3. IP address (from headers)
+4. Random UUID (fallback)
+
+### Global Rate Limiter
+
+Default IP-based rate limiting for unauthenticated requests (`middlewares/rate-limiter.ts:40-43`):
+
+```typescript
+export const rateLimiterMiddleware = createRateLimiter({
+  limit: env.HONO_RATE_LIMIT,
+  windowMs: env.HONO_RATE_LIMIT_WINDOW_MS,
+})
+```
+
+Configuration from environment:
+
+- `HONO_RATE_LIMIT`: Maximum requests per window (default: 60)
+- `HONO_RATE_LIMIT_WINDOW_MS`: Time window in milliseconds (default: 60000)
+
+### User-Specific Rate Limiting
+
+Authenticated users get higher limits (`middlewares/auth.ts:9-13`):
+
+```typescript
+const userRateLimiter = createRateLimiter({
+  getUserId: (c) => c.get("session")?.userId,
+  limit: env.HONO_RATE_LIMIT * 2,
+  windowMs: env.HONO_RATE_LIMIT_WINDOW_MS,
+})
+```
+
+Authenticated users receive **2x the base rate limit**.
+
+## Authentication Middleware
+
+Protects routes by verifying Better Auth sessions (`middlewares/auth.ts:15-26`):
+
+```typescript
+export const authMiddleware = createMiddleware<{ Variables: Session }>(async (c, next) => {
+  const session = await auth.api.getSession({ headers: c.req.raw.headers })
+
+  if (!session) {
+    return c.json({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } }, 401)
+  }
+
+  c.set("session", session.session)
+  c.set("user", session.user)
+
+  return userRateLimiter(c as Context, next as Next)
+})
+```
+
+**What it does:**
+
+1. Validates session using Better Auth
+2. Returns 401 if no valid session
+3. Sets `session` and `user` in context variables
+4. Applies user-specific rate limiting
+5. Continues to next handler
+
+### Using in Routes
+
+Apply to all routes in a router (`routers/v1.ts:32`):
+
+```typescript
+export const v1Router = new Hono<{
+  Variables: Session
+}>().use("/*", authMiddleware)
+```
+
+### Accessing Session Data
+
+Retrieve authenticated user and session from context:
+
+```typescript
+app.get("/profile", authMiddleware, (c) => {
+  const user = c.get("user")
+  const session = c.get("session")
+  
+  return c.json({ 
+    data: { 
+      user, 
+      session 
+    } 
+  })
+})
+```
+
+## Creating Custom Middleware
+
+Use `createMiddleware` from Hono:
+
+```typescript
+import { createMiddleware } from "hono/factory"
+
+export const loggingMiddleware = createMiddleware(async (c, next) => {
+  console.log(`[${new Date().toISOString()}] ${c.req.method} ${c.req.url}`)
+  
+  await next()
+  
+  console.log(`[${new Date().toISOString()}] Response: ${c.res.status}`)
+})
+```
+
+## Middleware with Type Variables
+
+Define custom context variables:
+
+```typescript
+type Variables = {
+  requestId: string
+  startTime: number
+}
+
+export const requestIdMiddleware = createMiddleware<{ Variables }>(async (c, next) => {
+  c.set("requestId", randomUUIDv7())
+  c.set("startTime", Date.now())
+  
+  await next()
+  
+  const duration = Date.now() - c.get("startTime")
+  c.header("X-Request-Id", c.get("requestId"))
+  c.header("X-Duration", duration.toString())
+})
+```
+
+## Conditional Middleware
+
+Apply middleware based on conditions:
+
+```typescript
+import { createMiddleware } from "hono/factory"
+
+export const adminMiddleware = createMiddleware(async (c, next) => {
+  const user = c.get("user")
+  
+  if (user?.role !== "admin") {
+    return c.json({ error: { code: "FORBIDDEN", message: "Admin access required" } }, 403)
+  }
+  
+  await next()
+})
+```
+
+Use in routes:
+
+```typescript
+app.get("/admin/users", authMiddleware, adminMiddleware, async (c) => {
+  const users = await db.select().from(users)
+  return c.json({ data: users })
+})
+```
+
+## Middleware Execution Order
+
+Middleware executes in the order defined:
+
+```typescript
+app.use("*", cors())        // 1. CORS headers
+app.use("*", logger())      // 2. Request logging
+app.use("*", rateLimiter)   // 3. Rate limiting
+
+app.get("/protected", 
+  authMiddleware,           // 4. Authentication
+  adminMiddleware,          // 5. Authorization
+  handler                   // 6. Route handler
+)
+```
+
+## Error Handling in Middleware
+
+Middleware errors are caught by the global error handler:
+
+```typescript
+export const validateApiKey = createMiddleware(async (c, next) => {
+  const apiKey = c.req.header("x-api-key")
+  
+  if (!apiKey) {
+    return c.json({ error: { code: "UNAUTHORIZED", message: "API key required" } }, 401)
+  }
+  
+  const valid = await verifyApiKey(apiKey)
+  
+  if (!valid) {
+    return c.json({ error: { code: "FORBIDDEN", message: "Invalid API key" } }, 403)
+  }
+  
+  await next()
+})
+```
+
+## Next Steps
+
+- [Validation](/backend/validation) - Define request/response schemas
+- [Routing](/backend/routing) - Learn about route structure

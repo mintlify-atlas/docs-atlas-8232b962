@@ -1,0 +1,650 @@
+---
+title: Components
+description: Shadcn UI components, custom components, and usage patterns
+---
+
+ZeroStarter uses Shadcn UI components built on top of Base UI and styled with Tailwind CSS. All components are fully customizable and accessible.
+
+## Shadcn UI Setup
+
+The project is configured with the `base-nova` style preset:
+
+```json title="components.json"
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/app/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "remixicon",
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  }
+}
+```
+
+**Key Configuration:**
+- **Style:** `base-nova` - Modern, minimal design system
+- **RSC:** React Server Components support enabled
+- **Icon Library:** Remix Icon for consistent iconography
+- **CSS Variables:** Theme customization via CSS variables
+
+## Core Components
+
+### Button
+
+Built on Base UI with multiple variants:
+
+```tsx title="src/components/ui/button.tsx"
+"use client"
+
+import { Button as ButtonPrimitive } from "@base-ui/react/button"
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        outline: "border-border bg-background hover:bg-muted hover:text-foreground",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-muted hover:text-foreground",
+        destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-8 gap-1.5 px-2.5",
+        xs: "h-6 gap-1 px-2 text-xs",
+        sm: "h-7 gap-1 px-2.5 text-[0.8rem]",
+        lg: "h-9 gap-1.5 px-2.5",
+        icon: "size-8",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  },
+)
+
+function Button({
+  className,
+  variant = "default",
+  size = "default",
+  ...props
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  return (
+    <ButtonPrimitive
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
+}
+
+export { Button, buttonVariants }
+```
+
+**Usage Examples:**
+
+<Tabs>
+  <Tab title="Variants">
+    ```tsx
+    import { Button } from "@/components/ui/button"
+
+    <Button variant="default">Primary</Button>
+    <Button variant="outline">Outline</Button>
+    <Button variant="secondary">Secondary</Button>
+    <Button variant="ghost">Ghost</Button>
+    <Button variant="destructive">Destructive</Button>
+    <Button variant="link">Link</Button>
+    ```
+  </Tab>
+
+  <Tab title="Sizes">
+    ```tsx
+    <Button size="xs">Extra Small</Button>
+    <Button size="sm">Small</Button>
+    <Button size="default">Default</Button>
+    <Button size="lg">Large</Button>
+    <Button size="icon">Icon</Button>
+    ```
+  </Tab>
+
+  <Tab title="With Icons">
+    ```tsx
+    import { RiGithubFill, RiArrowRightLine } from "@remixicon/react"
+
+    <Button>
+      <RiGithubFill className="size-5" />
+      GitHub
+    </Button>
+
+    <Button variant="outline">
+      Documentation
+      <RiArrowRightLine className="size-4" />
+    </Button>
+    ```
+  </Tab>
+
+  <Tab title="As Link">
+    ```tsx
+    import Link from "next/link"
+
+    <Button render={<Link href="/docs" />}>
+      Documentation
+    </Button>
+
+    <Button render={<a href="https://github.com" target="_blank" />}>
+      GitHub
+    </Button>
+    ```
+  </Tab>
+</Tabs>
+
+### Card
+
+Flexible card component with multiple sections:
+
+```tsx title="Example from homepage"
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { RiCodeLine } from "@remixicon/react"
+
+<Card className="hover:border-primary/50 border-2 transition-colors">
+  <CardHeader>
+    <div className="bg-primary/10 mb-2 flex size-12 items-center justify-center rounded-lg">
+      <RiCodeLine className="text-primary size-6" />
+    </div>
+    <CardTitle>Type-Safe API Client</CardTitle>
+    <CardDescription>
+      End-to-end type safety with Hono RPC. Your frontend knows exactly what your
+      backend returns. Catch errors at compile time.
+    </CardDescription>
+  </CardHeader>
+</Card>
+```
+
+**Available Components:**
+- `Card` - Main container
+- `CardHeader` - Header section
+- `CardTitle` - Title text
+- `CardDescription` - Description text
+- `CardContent` - Main content area
+- `CardFooter` - Footer section
+- `CardAction` - Action buttons
+
+### Input
+
+Form input component with validation states:
+
+```tsx title="src/components/ui/input.tsx"
+import { Input as InputPrimitive } from "@base-ui/react/input"
+import { cn } from "@/lib/utils"
+
+function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+  return (
+    <InputPrimitive
+      type={type}
+      data-slot="input"
+      className={cn(
+        "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+```
+
+**Usage with Form:**
+
+```tsx
+import { Field, FieldLabel, FieldError, FieldGroup } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { useForm } from "@tanstack/react-form"
+
+const form = useForm({
+  defaultValues: { email: "" },
+  onSubmit: async ({ value }) => {
+    console.log(value)
+  },
+})
+
+<FieldGroup>
+  <form.Field name="email">
+    {(field) => {
+      const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
+      return (
+        <Field data-invalid={isInvalid}>
+          <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+          <Input
+            id={field.name}
+            type="email"
+            value={field.state.value}
+            onBlur={field.handleBlur}
+            onChange={(e) => field.handleChange(e.target.value)}
+            aria-invalid={isInvalid}
+            placeholder="admin@example.com"
+          />
+          {isInvalid && <FieldError errors={field.state.meta.errors} />}
+        </Field>
+      )
+    }}
+  </form.Field>
+</FieldGroup>
+```
+
+## Form Components
+
+### Authentication Form Example
+
+From the actual codebase:
+
+```tsx title="src/components/access.tsx"
+"use client"
+
+import { RiGithubFill, RiGoogleFill, RiLoaderLine } from "@remixicon/react"
+import { useForm } from "@tanstack/react-form"
+import { useState } from "react"
+import { toast } from "sonner"
+import { z } from "zod"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { authClient } from "@/lib/auth/client"
+import { config } from "@/lib/config"
+
+const formSchema = z.object({
+  email: z.email({ message: "Please enter a valid email address." }),
+})
+
+export function Access() {
+  const [loader, setLoader] = useState<"email" | "github" | "google" | null>(null)
+  const [open, setOpen] = useState(false)
+
+  const form = useForm({
+    defaultValues: { email: "" },
+    validators: {
+      onSubmit: formSchema,
+      onChange: formSchema,
+      onBlur: formSchema,
+    },
+    onSubmit: async ({ value }) => {
+      setLoader("email")
+      const res = await authClient.signIn.magicLink({
+        email: value.email,
+        callbackURL: `${config.app.url}/dashboard`,
+      })
+      if (res.error) {
+        toast.error(res.error.message || "Provider Not Found")
+        setLoader(null)
+      } else {
+        toast.success("Check your email for the magic link!")
+        setLoader(null)
+      }
+      form.reset()
+    },
+  })
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button className="w-24 cursor-pointer" variant="outline" />}>
+        Login
+      </DialogTrigger>
+      <DialogContent className="max-w-md sm:max-w-md" initialFocus={false}>
+        <DialogHeader className="sr-only">
+          <DialogTitle className="text-center">Sign in/up</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col items-center gap-2">
+            <h1 className="text-xl font-semibold">Welcome to {config.app.name}</h1>
+          </div>
+          <form
+            id="email"
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              form.handleSubmit()
+            }}
+          >
+            <FieldGroup>
+              <form.Field name="email">
+                {(field) => {
+                  const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
+                  return (
+                    <Field data-invalid={isInvalid}>
+                      <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                      <Input
+                        id={field.name}
+                        type="email"
+                        name={field.name}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        aria-invalid={isInvalid}
+                        placeholder="admin@nrjdalal.com"
+                        disabled={loader === "email"}
+                      />
+                      {isInvalid && <FieldError errors={field.state.meta.errors} />}
+                    </Field>
+                  )
+                }}
+              </form.Field>
+            </FieldGroup>
+            <Button
+              form="email"
+              type="submit"
+              variant="secondary"
+              className="w-full cursor-pointer"
+              disabled={loader === "email"}
+            >
+              {loader === "email" ? <RiLoaderLine className="size-5 animate-spin" /> : null}
+              Sign in/up
+            </Button>
+          </form>
+          <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
+            <span className="bg-background text-muted-foreground relative z-10 px-2 text-xs">
+              OR
+            </span>
+          </div>
+          <div className="grid gap-4">
+            <Button
+              variant="outline"
+              type="button"
+              className="w-full cursor-pointer"
+              onClick={async () => {
+                setLoader("github")
+                const res = await authClient.signIn.social({
+                  provider: "github",
+                  callbackURL: `${config.app.url}/dashboard`,
+                })
+                if (res.error) {
+                  toast.error(res.error.message)
+                  setLoader(null)
+                }
+              }}
+              disabled={loader === "github"}
+            >
+              {loader === "github" ? (
+                <RiLoaderLine className="size-5 animate-spin" />
+              ) : (
+                <RiGithubFill className="size-5" />
+              )}
+              Continue with Github
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+```
+
+## Layout Components
+
+### Sidebar
+
+Collapsible sidebar component:
+
+```tsx
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarProvider,
+  SidebarRail,
+} from "@/components/ui/sidebar"
+
+<SidebarProvider defaultOpen={true}>
+  <Sidebar collapsible="icon">
+    <SidebarHeader>
+      {/* Header content */}
+    </SidebarHeader>
+    <SidebarContent>
+      {/* Main content */}
+    </SidebarContent>
+    <SidebarFooter>
+      {/* Footer content */}
+    </SidebarFooter>
+    <SidebarRail />
+  </Sidebar>
+  <main>{children}</main>
+</SidebarProvider>
+```
+
+## Utility Functions
+
+### cn() - Class Name Merger
+
+Combines Tailwind classes with proper conflict resolution:
+
+```tsx title="src/lib/utils.ts"
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+```
+
+**Usage:**
+
+```tsx
+import { cn } from "@/lib/utils"
+
+// Conditional classes
+<div className={cn(
+  "text-base",
+  isActive && "text-primary",
+  isDisabled && "opacity-50"
+)} />
+
+// Merge conflicting classes (text-base wins over text-sm)
+<div className={cn("text-sm", "text-base")} />
+
+// Component with className prop
+function Card({ className, ...props }) {
+  return (
+    <div
+      className={cn("rounded-lg border p-4", className)}
+      {...props}
+    />
+  )
+}
+```
+
+## Icon Usage
+
+Remix Icon library for consistent iconography:
+
+```tsx
+import {
+  RiGithubFill,
+  RiArrowRightLine,
+  RiCheckboxCircleLine,
+  RiCodeLine,
+} from "@remixicon/react"
+
+<RiGithubFill className="size-5" />
+<RiArrowRightLine className="size-4" />
+<RiCheckboxCircleLine className="text-primary size-6" />
+```
+
+**Size Classes:**
+- `size-3` - 12px
+- `size-4` - 16px
+- `size-5` - 20px
+- `size-6` - 24px
+
+## Custom Hooks
+
+### useIsMobile
+
+Detect mobile viewports:
+
+```tsx title="src/hooks/use-mobile.ts"
+import * as React from "react"
+
+const MOBILE_BREAKPOINT = 768
+
+export function useIsMobile() {
+  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+    const onChange = () => {
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+    }
+    mql.addEventListener("change", onChange)
+    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+    return () => mql.removeEventListener("change", onChange)
+  }, [])
+
+  return !!isMobile
+}
+```
+
+**Usage:**
+
+```tsx
+import { useIsMobile } from "@/hooks/use-mobile"
+
+function Component() {
+  const isMobile = useIsMobile()
+
+  return (
+    <div>
+      {isMobile ? <MobileView /> : <DesktopView />}
+    </div>
+  )
+}
+```
+
+## Available Components
+
+ZeroStarter includes 50+ Shadcn UI components:
+
+<AccordionGroup>
+  <Accordion title="Form Components">
+    - Button
+    - Input
+    - Textarea
+    - Select
+    - Checkbox
+    - Radio Group
+    - Switch
+    - Slider
+    - Calendar
+    - Date Picker
+    - Combobox
+    - Input OTP
+  </Accordion>
+
+  <Accordion title="Layout Components">
+    - Card
+    - Separator
+    - Tabs
+    - Accordion
+    - Sidebar
+    - Resizable
+    - Scroll Area
+    - Aspect Ratio
+  </Accordion>
+
+  <Accordion title="Overlay Components">
+    - Dialog
+    - Sheet
+    - Drawer
+    - Popover
+    - Tooltip
+    - Hover Card
+    - Alert Dialog
+    - Context Menu
+    - Dropdown Menu
+  </Accordion>
+
+  <Accordion title="Feedback Components">
+    - Alert
+    - Toast (Sonner)
+    - Progress
+    - Spinner
+    - Skeleton
+    - Badge
+  </Accordion>
+
+  <Accordion title="Navigation Components">
+    - Breadcrumb
+    - Navigation Menu
+    - Menubar
+    - Pagination
+    - Command
+  </Accordion>
+
+  <Accordion title="Data Display">
+    - Table
+    - Chart
+    - Avatar
+    - Carousel
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Warning>
+  **Component Composition**
+
+  Compose components instead of creating variations:
+
+  ```tsx
+  // Good
+  <Card>
+    <CardHeader>
+      <CardTitle>Title</CardTitle>
+      <CardDescription>Description</CardDescription>
+    </CardHeader>
+  </Card>
+
+  // Avoid
+  <CustomCardWithTitleAndDescription title="Title" description="Description" />
+  ```
+</Warning>
+
+<Tip>
+  **Server vs Client Components**
+
+  Import server-safe components in Server Components, use "use client" only when needed:
+
+  ```tsx
+  // Server Component - OK
+  import { Card, CardHeader } from "@/components/ui/card"
+
+  // Client Component - Required
+  "use client"
+  import { Button } from "@/components/ui/button"
+  ```
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Styling" icon="palette" href="/frontend/styling">
+    Learn Tailwind CSS configuration and patterns
+  </Card>
+  <Card title="Data Fetching" icon="database" href="/frontend/data-fetching">
+    Master TanStack Query for server state
+  </Card>
+</CardGroup>

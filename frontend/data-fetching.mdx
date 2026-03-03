@@ -1,0 +1,602 @@
+---
+title: Data Fetching
+description: TanStack Query setup, patterns, and usage with type-safe API client
+---
+
+ZeroStarter uses TanStack Query (React Query) for efficient server state management, combined with a type-safe Hono RPC client for end-to-end type safety.
+
+## TanStack Query Setup
+
+Query client is configured in the root providers:
+
+```tsx title="src/app/providers.tsx"
+"use client"
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { useState } from "react"
+import { DevTools } from "@/components/devtools"
+
+export function OuterProvider({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient())
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      {!isProduction(env.NEXT_PUBLIC_NODE_ENV) && <DevTools />}
+    </QueryClientProvider>
+  )
+}
+```
+
+**Key Features:**
+- Single `QueryClient` instance per app
+- Automatic request deduplication
+- Background refetching
+- Cache management
+- DevTools in development
+
+## Type-Safe API Client
+
+Hono RPC provides end-to-end type safety from backend to frontend:
+
+```tsx title="src/lib/api/client.ts"
+import type { AppType } from "@api/hono"
+import { hc } from "hono/client"
+import { config } from "@/lib/config"
+
+type Client = ReturnType<typeof hc<AppType>>
+
+const hcWithType = (...args: Parameters<typeof hc>): Client => hc<AppType>(...args)
+
+const url = config.api.internalUrl ? config.api.internalUrl : config.api.url
+
+const honoClient = hcWithType(url, {
+  init: {
+    credentials: "include",
+  },
+})
+
+export const apiClient = honoClient.api
+```
+
+**Type Safety Flow:**
+1. Backend defines routes with Hono
+2. Types exported as `AppType`
+3. Frontend imports `AppType`
+4. Full autocomplete and type checking
+
+## Basic Usage
+
+### Simple Query
+
+Real example from the codebase:
+
+```tsx title="src/components/api-status.tsx"
+"use client"
+
+import { useQuery } from "@tanstack/react-query"
+import { apiClient } from "@/lib/api/client"
+
+export function ApiStatus() {
+  const { isLoading, isError } = useQuery({
+    queryKey: ["api-health"],
+    queryFn: async () => {
+      const res = await apiClient.health.$get()
+      if (!res.ok) {
+        throw new Error("Systems are facing issues")
+      }
+      return res.json()
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds
+  })
+
+  if (isLoading) {
+    return (
+      <div className="invisible flex h-8 items-center justify-center gap-2 rounded-full border px-4 py-1.5 text-sm">
+        <div className="size-2 shrink-0 rounded-full" />
+        <span className="w-45 text-center">All systems are operational</span>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="bg-destructive/10 text-destructive border-destructive/20 animate-in fade-in flex h-8 items-center justify-center gap-2 rounded-full border px-4 py-1.5 text-sm duration-2000">
+        <div className="bg-destructive size-2 shrink-0 rounded-full" />
+        <span className="w-45 text-center">Systems are facing issues</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="animate-in fade-in flex h-8 items-center justify-center gap-2 rounded-full border border-green-500/20 bg-green-500/10 px-4 py-1.5 text-sm text-green-600 duration-2000 dark:text-green-400">
+      <div className="size-2 shrink-0 rounded-full bg-green-500" />
+      <span className="w-45 text-center">All systems are operational</span>
+    </div>
+  )
+}
+```
+
+**Key Concepts:**
+- `queryKey`: Unique identifier for the query
+- `queryFn`: Function that fetches the data
+- `refetchInterval`: Background refetch interval
+- States: `isLoading`, `isError`, `data`
+
+### Query with Parameters
+
+```tsx
+"use client"
+
+import { useQuery } from "@tanstack/react-query"
+import { apiClient } from "@/lib/api/client"
+
+function UserProfile({ userId }: { userId: string }) {
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["user", userId],
+    queryFn: async () => {
+      const res = await apiClient.users[":id"].$get({
+        param: { id: userId },
+      })
+      if (!res.ok) throw new Error("Failed to fetch user")
+      return res.json()
+    },
+    enabled: !!userId, // Only run when userId exists
+  })
+
+  if (isLoading) return <div>Loading...</div>
+  if (isError) return <div>Error: {error.message}</div>
+
+  return (
+    <div>
+      <h1>{data.name}</h1>
+      <p>{data.email}</p>
+    </div>
+  )
+}
+```
+
+## Mutations
+
+Mutations handle data modifications (POST, PUT, DELETE):
+
+```tsx
+"use client"
+
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
+import { apiClient } from "@/lib/api/client"
+import { Button } from "@/components/ui/button"
+
+function UpdateProfileButton({ userId, data }: { userId: string; data: any }) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (profileData: any) => {
+      const res = await apiClient.users[":id"].$patch({
+        param: { id: userId },
+        json: profileData,
+      })
+      if (!res.ok) throw new Error("Update failed")
+      return res.json()
+    },
+    onSuccess: () => {
+      // Invalidate and refetch user data
+      queryClient.invalidateQueries({ queryKey: ["user", userId] })
+      toast.success("Profile updated successfully!")
+    },
+    onError: (error) => {
+      toast.error(`Failed to update: ${error.message}`)
+    },
+  })
+
+  return (
+    <Button
+      onClick={() => mutation.mutate(data)}
+      disabled={mutation.isPending}
+    >
+      {mutation.isPending ? "Updating..." : "Update Profile"}
+    </Button>
+  )
+}
+```
+
+**Mutation Lifecycle:**
+1. `mutationFn` - Function that performs the mutation
+2. `onSuccess` - Called when mutation succeeds
+3. `onError` - Called when mutation fails
+4. `onSettled` - Called when mutation completes (success or error)
+
+## Advanced Patterns
+
+### Optimistic Updates
+
+Update UI immediately before server response:
+
+```tsx
+const mutation = useMutation({
+  mutationFn: async (newTodo: Todo) => {
+    const res = await apiClient.todos.$post({ json: newTodo })
+    if (!res.ok) throw new Error("Failed to create")
+    return res.json()
+  },
+  onMutate: async (newTodo) => {
+    // Cancel outgoing refetches
+    await queryClient.cancelQueries({ queryKey: ["todos"] })
+
+    // Snapshot previous value
+    const previousTodos = queryClient.getQueryData(["todos"])
+
+    // Optimistically update to the new value
+    queryClient.setQueryData(["todos"], (old: Todo[]) => [...old, newTodo])
+
+    // Return context with previous value
+    return { previousTodos }
+  },
+  onError: (err, newTodo, context) => {
+    // Rollback on error
+    queryClient.setQueryData(["todos"], context?.previousTodos)
+    toast.error("Failed to create todo")
+  },
+  onSettled: () => {
+    // Refetch after error or success
+    queryClient.invalidateQueries({ queryKey: ["todos"] })
+  },
+})
+```
+
+### Parallel Queries
+
+Fetch multiple queries simultaneously:
+
+```tsx
+function Dashboard() {
+  const userQuery = useQuery({
+    queryKey: ["user"],
+    queryFn: async () => {
+      const res = await apiClient.user.$get()
+      return res.json()
+    },
+  })
+
+  const statsQuery = useQuery({
+    queryKey: ["stats"],
+    queryFn: async () => {
+      const res = await apiClient.stats.$get()
+      return res.json()
+    },
+  })
+
+  const activityQuery = useQuery({
+    queryKey: ["activity"],
+    queryFn: async () => {
+      const res = await apiClient.activity.$get()
+      return res.json()
+    },
+  })
+
+  if (userQuery.isLoading || statsQuery.isLoading || activityQuery.isLoading) {
+    return <div>Loading...</div>
+  }
+
+  return (
+    <div>
+      <UserProfile data={userQuery.data} />
+      <Stats data={statsQuery.data} />
+      <Activity data={activityQuery.data} />
+    </div>
+  )
+}
+```
+
+### Dependent Queries
+
+Queries that depend on previous query results:
+
+```tsx
+function UserPosts({ userId }: { userId: string }) {
+  // First query
+  const userQuery = useQuery({
+    queryKey: ["user", userId],
+    queryFn: async () => {
+      const res = await apiClient.users[":id"].$get({ param: { id: userId } })
+      return res.json()
+    },
+  })
+
+  // Second query depends on first
+  const postsQuery = useQuery({
+    queryKey: ["posts", userQuery.data?.id],
+    queryFn: async () => {
+      const res = await apiClient.posts.$get({
+        query: { userId: userQuery.data!.id },
+      })
+      return res.json()
+    },
+    enabled: !!userQuery.data?.id, // Only run when user data exists
+  })
+
+  return (
+    <div>
+      {userQuery.isLoading && <div>Loading user...</div>}
+      {postsQuery.isLoading && <div>Loading posts...</div>}
+      {postsQuery.data && <PostsList posts={postsQuery.data} />}
+    </div>
+  )
+}
+```
+
+### Infinite Queries
+
+Pagination with infinite scroll:
+
+```tsx
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { apiClient } from "@/lib/api/client"
+
+function PostsList() {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["posts"],
+    queryFn: async ({ pageParam = 0 }) => {
+      const res = await apiClient.posts.$get({
+        query: {
+          cursor: pageParam.toString(),
+          limit: "10",
+        },
+      })
+      return res.json()
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: 0,
+  })
+
+  return (
+    <div>
+      {data?.pages.map((page, i) => (
+        <div key={i}>
+          {page.posts.map((post) => (
+            <PostItem key={post.id} post={post} />
+          ))}
+        </div>
+      ))}
+      {hasNextPage && (
+        <Button
+          onClick={() => fetchNextPage()}
+          disabled={isFetchingNextPage}
+        >
+          {isFetchingNextPage ? "Loading..." : "Load More"}
+        </Button>
+      )}
+    </div>
+  )
+}
+```
+
+## Query Invalidation
+
+Refresh stale data after mutations:
+
+<Tabs>
+  <Tab title="Specific Query">
+    ```tsx
+    // Invalidate a specific query
+    queryClient.invalidateQueries({ queryKey: ["user", userId] })
+    ```
+  </Tab>
+
+  <Tab title="Query Prefix">
+    ```tsx
+    // Invalidate all user queries
+    queryClient.invalidateQueries({ queryKey: ["user"] })
+    ```
+  </Tab>
+
+  <Tab title="Multiple Queries">
+    ```tsx
+    // Invalidate multiple related queries
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["user"] }),
+      queryClient.invalidateQueries({ queryKey: ["posts"] }),
+      queryClient.invalidateQueries({ queryKey: ["comments"] }),
+    ])
+    ```
+  </Tab>
+
+  <Tab title="All Queries">
+    ```tsx
+    // Invalidate all queries (use sparingly)
+    queryClient.invalidateQueries()
+    ```
+  </Tab>
+</Tabs>
+
+## Error Handling
+
+### Global Error Handling
+
+```tsx title="src/app/providers.tsx"
+const [queryClient] = useState(
+  () =>
+    new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: 3,
+          retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+          staleTime: 5 * 60 * 1000, // 5 minutes
+          gcTime: 10 * 60 * 1000, // 10 minutes
+          refetchOnWindowFocus: false,
+        },
+        mutations: {
+          retry: 1,
+          onError: (error) => {
+            console.error("Mutation error:", error)
+          },
+        },
+      },
+    }),
+)
+```
+
+### Component-Level Error Handling
+
+```tsx
+const { data, isError, error } = useQuery({
+  queryKey: ["user"],
+  queryFn: fetchUser,
+  throwOnError: false, // Handle error locally
+})
+
+if (isError) {
+  return (
+    <div className="text-destructive">
+      Error: {error.message}
+    </div>
+  )
+}
+```
+
+## DevTools
+
+TanStack Query DevTools are enabled in development:
+
+```tsx title="src/components/devtools.tsx"
+"use client"
+
+import { isProduction } from "@packages/env"
+import { env } from "@packages/env/web-next"
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
+
+export function DevTools() {
+  if (isProduction(env.NEXT_PUBLIC_NODE_ENV)) return null
+
+  return <ReactQueryDevtools initialIsOpen={false} />
+}
+```
+
+**Access DevTools:**
+- Click the TanStack Query icon in the bottom corner
+- Inspect queries, mutations, and cache
+- Manually trigger refetches
+- View query timelines
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Descriptive Query Keys">
+    Query keys should be hierarchical and descriptive:
+
+    ```tsx
+    // Good
+    queryKey: ["users", userId, "posts", { status: "published" }]
+
+    // Avoid
+    queryKey: ["data"]
+    ```
+  </Accordion>
+
+  <Accordion title="Colocate Query Logic">
+    Create custom hooks for reusable queries:
+
+    ```tsx
+    function useUser(userId: string) {
+      return useQuery({
+        queryKey: ["user", userId],
+        queryFn: async () => {
+          const res = await apiClient.users[":id"].$get({ param: { id: userId } })
+          return res.json()
+        },
+      })
+    }
+
+    // Usage
+    function UserProfile({ userId }: { userId: string }) {
+      const { data, isLoading } = useUser(userId)
+      // ...
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Leverage Stale Time">
+    Set appropriate `staleTime` to reduce unnecessary refetches:
+
+    ```tsx
+    useQuery({
+      queryKey: ["config"],
+      queryFn: fetchConfig,
+      staleTime: Infinity, // Config rarely changes
+    })
+
+    useQuery({
+      queryKey: ["notifications"],
+      queryFn: fetchNotifications,
+      staleTime: 30000, // Refetch every 30 seconds
+    })
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Loading States Gracefully">
+    Provide meaningful loading states:
+
+    ```tsx
+    if (isLoading) {
+      return <Skeleton className="h-20 w-full" />
+    }
+
+    if (isError) {
+      return <ErrorState error={error} retry={refetch} />
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Type Safety Examples
+
+### Fully Typed Request/Response
+
+```tsx
+import { apiClient } from "@/lib/api/client"
+
+// TypeScript knows the exact response shape
+const res = await apiClient.users.$post({
+  json: {
+    name: "John",
+    email: "john@example.com",
+    // TypeScript error if missing required fields!
+  },
+})
+
+// TypeScript knows the response type
+const data = await res.json()
+data.id // string
+data.name // string
+data.email // string
+// TypeScript error if accessing non-existent property!
+```
+
+### Type-Safe Query Parameters
+
+```tsx
+const res = await apiClient.posts.$get({
+  query: {
+    status: "published", // TypeScript validates allowed values
+    limit: "10",
+    // TypeScript error if invalid parameter!
+  },
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Components" icon="square-terminal" href="/frontend/components">
+    Learn about UI components and patterns
+  </Card>
+  <Card title="Styling" icon="palette" href="/frontend/styling">
+    Master Tailwind CSS configuration
+  </Card>
+</CardGroup>

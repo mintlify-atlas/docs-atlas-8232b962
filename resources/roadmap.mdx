@@ -1,0 +1,355 @@
+---
+title: "Roadmap"
+description: "Planned features and integrations for ZeroStarter"
+icon: "map"
+---
+
+<Note>
+  ZeroStarter is currently in **Release Candidate (RC)** status. All implemented features are stable and production-ready. We're actively adding new features and integrations.
+</Note>
+
+## Overview
+
+ZeroStarter is actively evolving with planned integrations for AI, analytics, background tasks, email, payments, and more. This roadmap outlines upcoming features and their implementation priorities.
+
+<Warning>
+  **Important for AI Assistants**: The following features are NOT currently implemented unless marked as "Implemented". Do not assume availability of these tools.
+</Warning>
+
+## Implementation Priorities
+
+### Phase 1 - High Priority
+
+These features are critical for core SaaS functionality and are prioritized for implementation.
+
+<CardGroup cols={2}>
+  <Card title="Resend Email" icon="envelope" color="#ca8a04">
+    Critical for user communication, transactional emails, and notifications.
+  </Card>
+  
+  <Card title="Better Auth Organizations" icon="users" color="#ca8a04">
+    Essential for multi-tenant SaaS with team collaboration features.
+  </Card>
+  
+  <Card title="Stripe Payments" icon="credit-card" color="#ca8a04">
+    Essential for monetization with subscriptions and one-time payments.
+  </Card>
+  
+  <Card title="Vercel AI SDK" icon="brain" color="#ca8a04">
+    Modern AI capabilities for chatbots and intelligent features.
+  </Card>
+</CardGroup>
+
+### Phase 2 - Medium Priority
+
+These features enhance developer experience and expand capabilities.
+
+<CardGroup cols={2}>
+  <Card title="Background Tasks" icon="clock" color="#2563eb">
+    Inngest or Trigger.dev for async processing and scheduled jobs.
+  </Card>
+  
+  <Card title="next-intl" icon="language" color="#2563eb">
+    Type-safe internationalization for Next.js applications.
+  </Card>
+  
+  <Card title="SendGrid" icon="paper-plane" color="#2563eb">
+    Alternative email provider for high-volume sending.
+  </Card>
+  
+  <Card title="Alternative Payments" icon="wallet" color="#2563eb">
+    Lemon Squeezy, Paddle, Razorpay, and others for market expansion.
+  </Card>
+</CardGroup>
+
+### Phase 3 - Lower Priority
+
+These features address specific use cases and niche requirements.
+
+<CardGroup cols={2}>
+  <Card title="i18next" icon="globe" color="#64748b">
+    Advanced internationalization features and translation workflows.
+  </Card>
+  
+  <Card title="Specialized Payments" icon="store" color="#64748b">
+    Polar, Autumn, Creem, Dodo for specific markets and use cases.
+  </Card>
+</CardGroup>
+
+## Feature Details
+
+### AI Integration
+
+<AccordionGroup>
+  <Accordion title="Vercel AI SDK" icon="brain">
+    **Status:** Planned | **Priority:** High
+    
+    Integration with [Vercel AI SDK](https://ai-sdk.dev) to enable AI-powered features.
+    
+    **Use Cases:**
+    - AI-powered customer support chatbots
+    - Content generation and summarization
+    - Intelligent search and recommendations
+    - Natural language processing for user inputs
+    
+    **Implementation:**
+    - Integration with OpenAI, Anthropic, and other AI providers
+    - Type-safe AI function calling
+    - Streaming responses support
+    - Server-side and client-side AI hooks
+  </Accordion>
+</AccordionGroup>
+
+### Background Tasks
+
+<AccordionGroup>
+  <Accordion title="Inngest" icon="server">
+    **Status:** Planned | **Priority:** Medium
+    
+    Integration with [Inngest](https://www.inngest.com) for reliable background job processing.
+    
+    **Use Cases:**
+    - Email sending and notifications
+    - Data processing and ETL jobs
+    - Scheduled reports and analytics
+    - Webhook processing
+    - Retry logic for failed operations
+    
+    **Implementation:**
+    - Type-safe function definitions
+    - Built-in retry and error handling
+    - Visual workflow builder
+    - Integration with Hono API routes
+  </Accordion>
+  
+  <Accordion title="Trigger.dev" icon="rocket">
+    **Status:** Planned | **Priority:** Medium
+    
+    Alternative integration with [Trigger.dev](https://trigger.dev) for background jobs.
+    
+    **Use Cases:**
+    - Long-running background processes
+    - Scheduled cron jobs
+    - Multi-step workflows
+    - Integration with external APIs
+    - Task queuing and processing
+    
+    **Implementation:**
+    - TypeScript-first approach
+    - Visual workflow editor
+    - Built-in observability
+    - Integration with existing API structure
+  </Accordion>
+</AccordionGroup>
+
+### Email Services
+
+<AccordionGroup>
+  <Accordion title="Resend" icon="envelope">
+    **Status:** Planned | **Priority:** High
+    
+    Integration with [Resend](https://resend.com) for transactional emails.
+    
+    **Use Cases:**
+    - User authentication emails (verification, password reset)
+    - Transactional notifications
+    - Marketing campaigns
+    - Email templates with React components
+    - Email analytics and tracking
+    
+    **Implementation:**
+    - React Email template support
+    - Type-safe email sending
+    - Webhook handling for email events
+    - Integration with background tasks for async sending
+  </Accordion>
+  
+  <Accordion title="SendGrid" icon="paper-plane">
+    **Status:** Planned | **Priority:** Medium
+    
+    Alternative integration with [SendGrid](https://sendgrid.com) for email delivery.
+    
+    **Use Cases:**
+    - High-volume email sending
+    - Marketing automation workflows
+    - Email template management
+    - Email analytics and reporting
+    - Contact list management
+  </Accordion>
+</AccordionGroup>
+
+### Payment Processing
+
+<AccordionGroup>
+  <Accordion title="Stripe" icon="credit-card">
+    **Status:** Planned | **Priority:** High
+    
+    Integration with [Stripe](https://stripe.com) for payment processing and subscriptions.
+    
+    **Use Cases:**
+    - One-time payments
+    - Recurring subscriptions
+    - Usage-based billing
+    - Invoice generation
+    - Payment method management
+    - Webhook handling for payment events
+    
+    **Implementation:**
+    - Stripe Checkout integration
+    - Stripe Elements for custom UI
+    - Webhook signature verification
+    - Type-safe Stripe API client
+    - Subscription management UI components
+  </Accordion>
+  
+  <Accordion title="Lemon Squeezy" icon="lemon">
+    **Status:** Planned | **Priority:** Medium
+    
+    Integration with [Lemon Squeezy](https://www.lemonsqueezy.com) for simplified payments.
+    
+    **Use Cases:**
+    - Global payment processing
+    - Tax handling automation
+    - Subscription management
+    - Affiliate program support
+    - Digital product delivery
+  </Accordion>
+  
+  <Accordion title="Paddle" icon="ship">
+    **Status:** Planned | **Priority:** Medium
+    
+    Integration with [Paddle](https://www.paddle.com) for merchant of record services.
+    
+    **Use Cases:**
+    - Merchant of record services
+    - Global tax compliance
+    - Subscription billing
+    - Revenue recovery
+    - Customer portal
+  </Accordion>
+  
+  <Accordion title="Other Payment Providers" icon="store">
+    **Status:** Planned | **Priority:** Low
+    
+    Additional payment integrations:
+    - **Razorpay** - Indian payment methods and processing
+    - **Polar** - Open-source monetization and sponsorships
+    - **Autumn** - Modern payment processing
+    - **Creem** - Subscription billing
+    - **Dodo** - Payment services
+  </Accordion>
+</AccordionGroup>
+
+### Organization & Teams
+
+<AccordionGroup>
+  <Accordion title="Better Auth Organizations" icon="users">
+    **Status:** Planned | **Priority:** High
+    
+    Integration with [Better Auth Organizations plugin](https://www.better-auth.com/docs/plugins/organization).
+    
+    **Use Cases:**
+    - Multi-tenant applications
+    - Team collaboration features
+    - Organization management
+    - Role-based access control (RBAC)
+    - Billing per organization
+    
+    **Implementation:**
+    - Database schema extensions
+    - Middleware for organization context
+    - UI components for team management
+    - Integration with existing auth system
+  </Accordion>
+</AccordionGroup>
+
+### Internationalization
+
+<AccordionGroup>
+  <Accordion title="next-intl" icon="language">
+    **Status:** Planned | **Priority:** Medium
+    
+    Integration with [next-intl](https://next-intl.dev) for Next.js-optimized i18n.
+    
+    **Use Cases:**
+    - Next.js App Router integration
+    - Type-safe translations
+    - Server and client components support
+    - Locale-based routing
+    - SEO-friendly URLs
+    
+    **Implementation:**
+    - Built for Next.js 13+ App Router
+    - TypeScript-first approach
+    - Automatic locale detection
+    - Integration with Next.js middleware
+  </Accordion>
+  
+  <Accordion title="i18next" icon="globe">
+    **Status:** Planned | **Priority:** Low
+    
+    Integration with [i18next](https://www.i18next.com) for comprehensive i18n.
+    
+    **Use Cases:**
+    - Multi-language support
+    - Locale-based content rendering
+    - Date, time, and number formatting
+    - Right-to-left (RTL) language support
+    - Language detection and switching
+  </Accordion>
+</AccordionGroup>
+
+### Already Implemented
+
+<AccordionGroup>
+  <Accordion title="Scalar API Documentation" icon="file-lines">
+    **Status:** ✅ Implemented
+    
+    Integration with [Scalar](https://scalar.com) for beautiful API documentation.
+    
+    **Features:**
+    - Auto-generated API documentation at `/api/docs`
+    - OpenAPI spec available at `/api/openapi.json`
+    - Interactive API explorer with request testing
+    - Code samples for multiple languages
+    - Full request/response schema documentation
+    
+    See the [Type-Safe API documentation](/core-concepts/type-safe-api) for usage details.
+  </Accordion>
+  
+  <Accordion title="PostHog Analytics" icon="chart-line">
+    **Status:** ✅ Implemented
+    
+    Integration with [PostHog](https://posthog.com) for product analytics.
+    
+    **Features:**
+    - Product analytics and user tracking
+    - Feature flags and A/B testing
+    - Session recordings and heatmaps
+    - User funnels and retention analysis
+    
+    See the [Analytics documentation](/features/analytics) for configuration.
+  </Accordion>
+</AccordionGroup>
+
+## Contributing to the Roadmap
+
+Want to help implement these features or suggest new ones?
+
+<Steps>
+  <Step title="Check existing issues">
+    Review [GitHub Issues](https://github.com/nrjdalal/zerostarter/issues) to see what's already being discussed.
+  </Step>
+  
+  <Step title="Open a discussion">
+    For new features, open an issue to discuss the implementation approach before starting work.
+  </Step>
+  
+  <Step title="Follow contributing guidelines">
+    Review our [Contributing Guidelines](/resources/contributing) before submitting a pull request.
+  </Step>
+</Steps>
+
+<Note>
+  This roadmap is subject to change based on community feedback and priorities. Features are implemented based on demand and community contributions.
+</Note>

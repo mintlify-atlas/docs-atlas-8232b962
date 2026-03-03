@@ -1,0 +1,415 @@
+---
+title: "FAQ"
+description: "Frequently asked questions about ZeroStarter"
+icon: "circle-question"
+---
+
+## General Questions
+
+<AccordionGroup>
+  <Accordion title="What is ZeroStarter?" icon="rocket">
+    ZeroStarter is a modern, type-safe SaaS starter template built with a monorepo architecture. It provides a complete blueprint for building production-ready SaaS applications with battle-tested patterns, end-to-end type safety, and enterprise-grade authentication.
+    
+    It's not just a starter template - it's **Architecture & Best Practices as a Service** with comprehensive documentation and AI-optimized guides.
+  </Accordion>
+  
+  <Accordion title="Is ZeroStarter production-ready?" icon="check">
+    Yes! ZeroStarter is currently in **Release Candidate (RC)** status. All implemented features are stable and production-ready. The project is actively maintained with new features and integrations being added regularly.
+    
+    Many developers are already using ZeroStarter for production applications.
+  </Accordion>
+  
+  <Accordion title="What's included in ZeroStarter?" icon="box">
+    ZeroStarter includes:
+    - **Frontend**: Next.js 16 with React 19
+    - **Backend**: Hono API with end-to-end type safety
+    - **Database**: PostgreSQL with Drizzle ORM
+    - **Authentication**: Better Auth with GitHub and Google OAuth
+    - **Analytics**: PostHog for product analytics and session recordings
+    - **UI Components**: Shadcn UI with Tailwind CSS
+    - **API Documentation**: Scalar with auto-generated OpenAPI specs
+    - **Deployment**: Docker and Vercel configurations
+    
+    See the [Architecture documentation](/getting-started/architecture) for complete details.
+  </Accordion>
+  
+  <Accordion title="What license is ZeroStarter under?" icon="scale-balanced">
+    ZeroStarter is licensed under the **MIT License**, which means you can use it freely for personal or commercial projects, modify it, and distribute it. See the [LICENSE](https://github.com/nrjdalal/zerostarter/blob/main/LICENSE.md) for full details.
+  </Accordion>
+  
+  <Accordion title="Who maintains ZeroStarter?" icon="user">
+    ZeroStarter is created and maintained by [Neeraj Dalal](https://twitter.com/nrjdalal) with contributions from the open-source community. Follow [@nrjdalal](https://twitter.com/nrjdalal) on X for updates.
+  </Accordion>
+</AccordionGroup>
+
+## Getting Started
+
+<AccordionGroup>
+  <Accordion title="Do I need to know TypeScript?" icon="code">
+    Yes, TypeScript knowledge is recommended. ZeroStarter is built with TypeScript throughout the stack for type safety. However, if you're familiar with JavaScript, you can learn TypeScript while using ZeroStarter.
+    
+    The end-to-end type safety is one of ZeroStarter's key features, catching errors at compile time.
+  </Accordion>
+  
+  <Accordion title="What are the prerequisites for running ZeroStarter?" icon="list-check">
+    You need:
+    - **Bun** v1.3.0 or later (runtime and package manager)
+    - **PostgreSQL** database (local or hosted)
+    - **Node.js knowledge** and basic understanding of React
+    - **Git** for version control
+    
+    Optional but recommended:
+    - GitHub and Google OAuth apps for authentication
+    - PostHog account for analytics
+    
+    See the [Installation guide](/getting-started/installation) for detailed setup instructions.
+  </Accordion>
+  
+  <Accordion title="Can I use npm or yarn instead of Bun?" icon="package">
+    While ZeroStarter is optimized for Bun, you can technically use other package managers. However, Bun is recommended because:
+    - It's significantly faster than npm/yarn
+    - The project is configured and tested with Bun
+    - Some scripts and configurations are Bun-specific
+    
+    For the best experience, install [Bun](https://bun.sh) - it's easy and the performance benefits are worth it.
+  </Accordion>
+  
+  <Accordion title="How long does it take to set up?" icon="clock">
+    Initial setup takes approximately **15-30 minutes** including:
+    - Cloning the repository (1 minute)
+    - Installing dependencies (2-3 minutes)
+    - Setting up environment variables (5-10 minutes)
+    - Database setup (5 minutes)
+    - Configuring OAuth providers (5-10 minutes)
+    
+    You can start developing immediately after setup. Deployment to production typically takes an additional 10-15 minutes.
+  </Accordion>
+</AccordionGroup>
+
+## Technical Questions
+
+<AccordionGroup>
+  <Accordion title="How does the type-safe API work?" icon="shield">
+    ZeroStarter uses [Hono RPC](https://hono.dev/docs/guides/rpc) to provide end-to-end type safety between backend and frontend:
+    
+    1. Backend routes are defined in `api/hono/src/routers` and exported as `AppType`
+    2. Frontend client at `web/next/src/lib/api/client.ts` infers types using `hono/client`
+    3. Requests and responses are fully typed with autocomplete
+    4. Errors are caught at compile time, not runtime
+    
+    See the [Type-Safe API documentation](/core-concepts/type-safe-api) for examples.
+  </Accordion>
+  
+  <Accordion title="What database does ZeroStarter use?" icon="database">
+    ZeroStarter uses **PostgreSQL** with [Drizzle ORM](https://orm.drizzle.team) for:
+    - Type-safe database queries
+    - Automatic migrations
+    - Schema management
+    - Excellent TypeScript support
+    
+    You can use any PostgreSQL provider (local, Neon, Supabase, AWS RDS, etc.). The connection is configured via the `POSTGRES_URL` environment variable.
+  </Accordion>
+  
+  <Accordion title="Can I use a different database?" icon="server">
+    While ZeroStarter is configured for PostgreSQL, Drizzle ORM supports multiple databases including MySQL and SQLite. However, switching databases would require:
+    - Updating the database configuration in `packages/db`
+    - Modifying the Drizzle adapter
+    - Regenerating migrations
+    - Testing authentication flows
+    
+    PostgreSQL is recommended for production SaaS applications due to its reliability and features.
+  </Accordion>
+  
+  <Accordion title="How do I add new API routes?" icon="route">
+    To add new API routes:
+    
+    1. Create a new router file in `api/hono/src/routers/`
+    2. Define your routes with Zod validation
+    3. Export the router and add it to `api/hono/src/index.ts`
+    4. The frontend client automatically gets type inference
+    
+    Example:
+    ```typescript
+    // api/hono/src/routers/example.ts
+    import { createRouter } from 'hono-openapi'
+    import { z } from 'zod'
+    
+    export const exampleRouter = createRouter()
+      .get('/example', {
+        request: { query: z.object({ id: z.string() }) },
+        response: z.object({ data: z.string() })
+      }, async (c) => {
+        return c.json({ data: 'example' })
+      })
+    ```
+    
+    The route is immediately available with full type safety in the frontend.
+  </Accordion>
+  
+  <Accordion title="What styling approach does ZeroStarter use?" icon="palette">
+    ZeroStarter uses:
+    - **Tailwind CSS** for utility-first styling
+    - **Shadcn UI** for pre-built accessible components
+    - **CSS Variables** for theming (light/dark mode)
+    - **next-themes** for theme management
+    
+    All components are customizable and you can add your own design system on top of this foundation.
+  </Accordion>
+</AccordionGroup>
+
+## Development & Deployment
+
+<AccordionGroup>
+  <Accordion title="How do I run the development server?" icon="terminal">
+    After completing the installation:
+    
+    ```bash
+    bun dev
+    ```
+    
+    This starts both the Next.js frontend (port 3000) and Hono API (port 4000) using Turborepo.
+    
+    Access:
+    - Frontend: `http://localhost:3000`
+    - Backend: `http://localhost:4000`
+    - API Docs: `http://localhost:4000/api/docs`
+  </Accordion>
+  
+  <Accordion title="Can I deploy to Vercel?" icon="cloud">
+    Yes! ZeroStarter includes Vercel configuration and can be deployed in minutes:
+    
+    1. Push your code to GitHub
+    2. Import the project in Vercel
+    3. Configure environment variables
+    4. Deploy both `web/next` and `api/hono`
+    
+    See the [Vercel Deployment guide](/deployment/vercel) for detailed instructions.
+  </Accordion>
+  
+  <Accordion title="Does ZeroStarter support Docker?" icon="docker">
+    Yes! Docker and Docker Compose configurations are included:
+    
+    ```bash
+    docker compose up
+    ```
+    
+    This starts all services (frontend, backend, database) in containers. See the [Docker documentation](/deployment/docker) for details.
+  </Accordion>
+  
+  <Accordion title="How do I handle database migrations?" icon="database">
+    Database migrations use Drizzle Kit:
+    
+    ```bash
+    # Generate migration from schema changes
+    bun run db:generate
+    
+    # Apply migrations to database
+    bun run db:migrate
+    
+    # Open Drizzle Studio (database GUI)
+    bun run db:studio
+    ```
+    
+    Migrations are stored in `packages/db/drizzle` and can be version controlled.
+  </Accordion>
+  
+  <Accordion title="What scripts are available?" icon="list">
+    Common scripts:
+    
+    ```bash
+    bun dev              # Start development server
+    bun run build        # Build all packages
+    bun run check-types  # TypeScript type checking
+    bun run format       # Format code with Oxfmt
+    bun run lint         # Lint code with Oxlint
+    bun run db:generate  # Generate database migrations
+    bun run db:migrate   # Run database migrations
+    bun run db:studio    # Open Drizzle Studio
+    ```
+    
+    See all available scripts in the root `package.json`.
+  </Accordion>
+</AccordionGroup>
+
+## Features & Customization
+
+<AccordionGroup>
+  <Accordion title="How do I add authentication providers?" icon="key">
+    ZeroStarter uses Better Auth which supports multiple providers:
+    
+    1. **Already configured**: GitHub, Google
+    2. **Easy to add**: Discord, Facebook, Twitter, etc.
+    
+    To add a provider:
+    1. Configure the OAuth app with the provider
+    2. Add credentials to `.env`
+    3. Update `packages/auth/src/index.ts`
+    4. Add the sign-in button to the frontend
+    
+    See [Better Auth documentation](https://better-auth.com) for all supported providers.
+  </Accordion>
+  
+  <Accordion title="Is authentication required for all routes?" icon="lock">
+    No. Authentication is optional and can be configured per route:
+    
+    - Public routes don't require authentication
+    - Protected routes use middleware to check auth status
+    - API routes can be public or protected
+    
+    You have full control over which routes require authentication.
+  </Accordion>
+  
+  <Accordion title="How do I customize the UI?" icon="paintbrush">
+    Shadcn UI components are located in `web/next/src/components/ui/`. You can:
+    
+    1. Modify existing components directly
+    2. Update Tailwind config for global styling
+    3. Change theme colors in CSS variables
+    4. Add new Shadcn components:
+    
+    ```bash
+    bunx shadcn@latest add [component-name]
+    ```
+    
+    All components are yours to customize - there's no abstraction layer.
+  </Accordion>
+  
+  <Accordion title="What analytics features are available?" icon="chart-line">
+    ZeroStarter includes PostHog integration for:
+    
+    - **Product analytics**: User behavior, page views, custom events
+    - **Feature flags**: A/B testing and gradual rollouts
+    - **Session recordings**: Watch user sessions to identify issues
+    - **Funnels & retention**: Analyze user journeys
+    
+    Analytics are optional. Configure via `NEXT_PUBLIC_POSTHOG_KEY` in `.env`.
+  </Accordion>
+  
+  <Accordion title="Can I add email functionality?" icon="envelope">
+    Email integration is on the [roadmap](/resources/roadmap) with planned support for:
+    
+    - **Resend** (High priority)
+    - **SendGrid** (Medium priority)
+    
+    Currently, you can add email manually using any provider. Email integration will include:
+    - Transactional emails (auth, notifications)
+    - Email templates with React components
+    - Webhook handling
+  </Accordion>
+  
+  <Accordion title="How do I add payment processing?" icon="credit-card">
+    Payment integrations are planned on the [roadmap](/resources/roadmap):
+    
+    - **Stripe** (High priority) - Subscriptions and one-time payments
+    - **Lemon Squeezy** (Medium priority) - Simplified payments with tax handling
+    - **Paddle** (Medium priority) - Merchant of record
+    - **Other providers** (Lower priority) - Razorpay, Polar, etc.
+    
+    You can currently integrate payments manually. Official integrations will include type-safe clients and webhook handling.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Installation fails - what should I do?" icon="wrench">
+    If `bun install` fails:
+    
+    1. Try with `--ignore-scripts` flag:
+       ```bash
+       bun install --ignore-scripts
+       ```
+    
+    2. Clear Bun cache:
+       ```bash
+       rm -rf node_modules
+       rm bun.lockb
+       bun install
+       ```
+    
+    3. Ensure you're using Bun v1.3.0 or later:
+       ```bash
+       bun --version
+       bun upgrade
+       ```
+    
+    See the [Troubleshooting guide](/resources/troubleshooting) for more solutions.
+  </Accordion>
+  
+  <Accordion title="Database connection errors?" icon="database">
+    Common database issues:
+    
+    1. **Invalid connection string**: Check `POSTGRES_URL` format in `.env`
+    2. **Database not running**: Ensure PostgreSQL is running
+    3. **Firewall issues**: Check network/firewall settings
+    4. **SSL required**: Some providers require `?sslmode=require` in connection string
+    
+    Test your connection:
+    ```bash
+    bun run db:studio
+    ```
+    
+    See [Troubleshooting](/resources/troubleshooting#database-issues) for detailed solutions.
+  </Accordion>
+  
+  <Accordion title="Type errors in the frontend?" icon="bug">
+    If you see TypeScript errors:
+    
+    1. Ensure backend is built:
+       ```bash
+       bun run build
+       ```
+    
+    2. Check types:
+       ```bash
+       bun run check-types
+       ```
+    
+    3. Restart TypeScript server in your IDE
+    
+    4. Verify `AppType` is exported from `api/hono/src/index.ts`
+    
+    The frontend depends on backend types being generated first.
+  </Accordion>
+</AccordionGroup>
+
+## Contributing
+
+<AccordionGroup>
+  <Accordion title="How can I contribute?" icon="code-pull-request">
+    Contributions are welcome! See the [Contributing Guidelines](/resources/contributing) for:
+    
+    - Code contribution process
+    - Pull request guidelines
+    - Code style and conventions
+    - Testing requirements
+    
+    For questions, open an issue on [GitHub](https://github.com/nrjdalal/zerostarter/issues).
+  </Accordion>
+  
+  <Accordion title="Where can I get help?" icon="life-ring">
+    Get help through:
+    
+    - **Documentation**: [zerostarter.dev/docs](https://zerostarter.dev/docs)
+    - **GitHub Issues**: [Report bugs or ask questions](https://github.com/nrjdalal/zerostarter/issues)
+    - **AI/LLM Docs**: [llms.txt](https://zerostarter.dev/llms.txt) for AI assistants
+    - **Twitter/X**: Follow [@nrjdalal](https://twitter.com/nrjdalal) for updates
+  </Accordion>
+  
+  <Accordion title="Can I use ZeroStarter for client projects?" icon="briefcase">
+    Absolutely! ZeroStarter is MIT licensed, which means you can:
+    
+    - Use it for commercial projects
+    - Modify it as needed
+    - Use it for client work
+    - Build and sell products based on it
+    
+    No attribution required, though starring the [repository](https://github.com/nrjdalal/zerostarter) is appreciated!
+  </Accordion>
+</AccordionGroup>
+
+## Still have questions?
+
+<Card title="Open an Issue" icon="github" href="https://github.com/nrjdalal/zerostarter/issues">
+  Can't find your answer? Open an issue on GitHub and we'll help you out.
+</Card>

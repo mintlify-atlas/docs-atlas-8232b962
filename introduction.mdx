@@ -1,0 +1,129 @@
+---
+title: Introduction
+description: A modern, type-safe, and high-performance SaaS starter template built with a monorepo architecture
+---
+
+# Welcome to ZeroStarter
+
+ZeroStarter is a modern, type-safe, and high-performance SaaS starter template built with a monorepo architecture. It provides everything you need to build and ship production-ready SaaS applications with battle-tested patterns and practices.
+
+<Note>
+  ZeroStarter is currently in **Release Candidate (RC)** status. All implemented features are stable and production-ready. We're actively adding new features and integrations day-by-day.
+</Note>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="End-to-End Type Safety" icon="shield-check">
+    Hono RPC ensures type safety from database to frontend. Catch errors at compile time, ship with confidence.
+  </Card>
+  
+  <Card title="Modular Architecture" icon="layer-group">
+    Clean, plug-and-play packages that work independently or together. Swap components, extend functionality, or customize without breaking the system.
+  </Card>
+  
+  <Card title="Production-Ready Performance" icon="bolt">
+    Optimized with Bun runtime and Turborepo for blazing-fast development and builds.
+  </Card>
+  
+  <Card title="Beautiful UI Out of the Box" icon="palette">
+    Shadcn UI components with Tailwind CSS, ready to customize or use as-is.
+  </Card>
+  
+  <Card title="Enterprise-Grade Auth" icon="lock">
+    Better Auth integration with GitHub, Google, and more — fully configured and ready to extend.
+  </Card>
+  
+  <Card title="Comprehensive Documentation" icon="book">
+    Every pattern, practice, and decision documented with AI-optimized llms.txt.
+  </Card>
+</CardGroup>
+
+## Tech Stack Highlights
+
+- **Runtime & Build**: [Bun](https://bun.sh) + [Turborepo](https://turbo.build)
+- **Frontend**: [Next.js 16](https://nextjs.org)
+- **Backend**: [Hono](https://hono.dev) with type-safe RPC
+- **Database**: [PostgreSQL](https://www.postgresql.org) with [Drizzle ORM](https://orm.drizzle.team)
+- **Authentication**: [Better Auth](https://better-auth.com)
+- **UI Components**: [Shadcn UI](https://ui.shadcn.com) + [Tailwind CSS](https://tailwindcss.com)
+- **Data Fetching**: [TanStack Query](https://tanstack.com/query/latest)
+- **Validation**: [Zod](https://zod.dev)
+
+## Quick Start
+
+```bash
+# Clone the template
+bunx gitpick https://github.com/nrjdalal/zerostarter/tree/main
+cd zerostarter
+
+# Install dependencies
+bun install
+
+# Set up environment variables
+cp .env.example .env
+
+# Set up database
+bun run db:generate
+bun run db:migrate
+
+# Start development
+bun dev
+```
+
+<Card title="Complete Installation Guide" icon="rocket" href="/getting-started/installation">
+  Follow our step-by-step installation guide to get started
+</Card>
+
+## Type-Safe API Example
+
+ZeroStarter uses [Hono RPC](https://hono.dev/docs/guides/rpc) to provide end-to-end type safety between backend and frontend:
+
+```ts
+import { apiClient } from "@/lib/api/client"
+
+// Fully typed request and response
+const res = await apiClient.health.$get()
+const { data } = await res.json()
+// TypeScript knows exactly what 'data' contains!
+```
+
+Interactive API documentation is available at `/api/docs` powered by [Scalar](https://scalar.com).
+
+## Explore the Documentation
+
+<CardGroup cols={2}>
+  <Card title="Getting Started" icon="play" href="/getting-started/installation">
+    Installation, setup, and your first steps
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/getting-started/architecture">
+    Deep dive into the tech stack and monorepo structure
+  </Card>
+  
+  <Card title="Type-Safe API" icon="code" href="/core-concepts/type-safe-api">
+    Learn about Hono RPC and end-to-end type safety
+  </Card>
+  
+  <Card title="Deployment" icon="cloud-arrow-up" href="/deployment/vercel">
+    Deploy to production with Vercel or Docker
+  </Card>
+  
+  <Card title="Project Structure" icon="folder-tree" href="/getting-started/project-structure">
+    Understand the monorepo organization
+  </Card>
+  
+  <Card title="Scripts" icon="terminal" href="/getting-started/scripts">
+    Available commands and utilities
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+- **GitHub**: [nrjdalal/zerostarter](https://github.com/nrjdalal/zerostarter)
+- **X/Twitter**: Follow [@nrjdalal](https://twitter.com/nrjdalal) for updates
+- **AI/LLM Users**: Check out our [llms.txt](https://zerostarter.dev/llms.txt) for optimized documentation
+
+<Note>
+  **Star the repository** on GitHub if you find ZeroStarter helpful!
+</Note>

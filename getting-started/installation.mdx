@@ -1,0 +1,225 @@
+---
+title: Installation
+description: Complete guide to installing and setting up ZeroStarter on your local machine
+---
+
+## Prerequisites
+
+Before installing ZeroStarter, ensure you have the following installed:
+
+- **Bun** - v1.3.7 or later ([Install Bun](https://bun.sh))
+- **PostgreSQL** - A PostgreSQL database instance
+- **Git** - For cloning the repository
+
+## Installation Steps
+
+<Steps>
+
+### Clone the Repository
+
+Clone ZeroStarter using `gitpick` to get the latest template:
+
+```bash
+bunx gitpick https://github.com/nrjdalal/zerostarter/tree/main
+cd zerostarter
+```
+
+Alternatively, you can use standard git clone:
+
+```bash
+git clone https://github.com/nrjdalal/zerostarter.git
+cd zerostarter
+```
+
+### Install Dependencies
+
+Install all workspace dependencies using Bun:
+
+```bash
+bun install
+```
+
+This will install dependencies for all packages in the monorepo, including:
+- Frontend (Next.js)
+- Backend (Hono)
+- Shared packages (auth, db, env, tsconfig)
+
+### Set Up Environment Variables
+
+Copy the example environment file and configure your settings:
+
+```bash
+cp .env.example .env
+```
+
+Edit the `.env` file and configure the following required variables:
+
+#### Server Variables
+
+```bash
+# App URLs
+HONO_APP_URL=http://localhost:4000
+HONO_TRUSTED_ORIGINS=http://localhost:3000
+
+# Rate Limiting
+HONO_RATE_LIMIT=60
+HONO_RATE_LIMIT_WINDOW_MS=60000
+
+# Authentication Secret (generate using: openssl rand -base64 32)
+BETTER_AUTH_SECRET=your_secret_here
+
+# Database (generate using: bunx pglaunch -k)
+POSTGRES_URL=postgresql://user:password@localhost:5432/database
+```
+
+#### Client Variables
+
+```bash
+# App URLs
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_API_URL=http://localhost:4000
+```
+
+#### Optional OAuth Providers
+
+<Accordion title="GitHub OAuth Setup">
+
+To enable GitHub authentication:
+
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+2. Create a new OAuth App
+3. Set Authorization callback URL to: `http://localhost:3000/api/auth/callback/github`
+4. Add the credentials to your `.env`:
+
+```bash
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+```
+
+</Accordion>
+
+<Accordion title="Google OAuth Setup">
+
+To enable Google authentication:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create a new OAuth 2.0 Client ID
+3. Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
+4. Add the credentials to your `.env`:
+
+```bash
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+```
+
+</Accordion>
+
+### Set Up the Database
+
+Generate and run database migrations:
+
+```bash
+bun run db:generate
+bun run db:migrate
+```
+
+These commands will:
+- Generate Drizzle ORM migration files based on your schema
+- Apply migrations to your PostgreSQL database
+
+<Note>
+Make sure your `POSTGRES_URL` is correctly configured before running migrations.
+</Note>
+
+### Optional: Launch Drizzle Studio
+
+You can explore and manage your database using Drizzle Studio:
+
+```bash
+bun run db:studio
+```
+
+This opens a web interface at `https://local.drizzle.studio` for database management.
+
+</Steps>
+
+## Verify Installation
+
+To verify everything is set up correctly, start the development server:
+
+```bash
+bun dev
+```
+
+This will start:
+- **Frontend** at `http://localhost:3000`
+- **Backend API** at `http://localhost:4000`
+- **API Documentation** at `http://localhost:4000/api/docs`
+
+You should see both services running in the Turbo TUI (Terminal UI).
+
+## Common Issues
+
+<Accordion title="Database connection errors">
+
+If you encounter database connection issues:
+
+1. Verify your `POSTGRES_URL` is correct
+2. Ensure PostgreSQL is running
+3. Check that the database exists
+4. Verify network connectivity to the database
+
+Quick database setup using pglaunch:
+
+```bash
+bunx pglaunch -k
+```
+
+</Accordion>
+
+<Accordion title="Port already in use">
+
+If ports 3000 or 4000 are already in use, you can:
+
+1. Stop the process using the port
+2. Or modify the ports in your `.env` file:
+
+```bash
+HONO_APP_URL=http://localhost:4001
+NEXT_PUBLIC_API_URL=http://localhost:4001
+```
+
+</Accordion>
+
+<Accordion title="Bun version mismatch">
+
+ZeroStarter requires Bun v1.3.7 or later. Update Bun:
+
+```bash
+bun upgrade
+```
+
+Or install a specific version:
+
+```bash
+curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.7"
+```
+
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/getting-started/quickstart">
+    Follow the quick start guide to build your first feature
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/getting-started/architecture">
+    Learn about ZeroStarter's architecture and tech stack
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/getting-started/project-structure">
+    Explore the monorepo structure and organization
+  </Card>
+  <Card title="Type-Safe API" icon="shield-check" href="/core-concepts/type-safe-api">
+    Understand end-to-end type safety with Hono RPC
+  </Card>
+</CardGroup>

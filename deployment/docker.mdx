@@ -1,0 +1,559 @@
+---
+title: Docker Deployment
+description: Deploy ZeroStarter using Docker and Docker Compose
+---
+
+Deploy ZeroStarter using containerized environments with Docker. This guide covers both development and production deployments.
+
+## Prerequisites
+
+- Docker 20.10 or higher
+- Docker Compose 2.0 or higher
+- PostgreSQL database (local or remote)
+
+## Docker Configuration
+
+ZeroStarter includes optimized Dockerfiles for both services using multi-stage builds with Bun runtime.
+
+### API Dockerfile
+
+The Hono API uses a three-stage build process (`api/hono/Dockerfile`):
+
+```dockerfile api/hono/Dockerfile
+FROM oven/bun:latest AS base
+
+FROM base AS prepare
+WORKDIR /app
+RUN bun install --global turbo
+COPY . .
+RUN turbo prune @api/hono --docker
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=prepare /app/.env .
+COPY --from=prepare /app/.github/ ./.github/
+COPY --from=prepare /app/out/json/ .
+COPY --from=prepare /app/out/bun.lock .
+RUN bun install --frozen-lockfile --ignore-scripts
+COPY --from=prepare /app/out/full/ .
+ENV NODE_ENV=production
+RUN bun run build
+
+FROM base AS runner
+WORKDIR /app
+COPY --from=builder /app/node_modules/ ./node_modules/
+# @api/hono
+COPY --from=builder /app/api/hono/dist/ ./dist/
+COPY --from=builder /app/api/hono/package.json .
+# @packages/auth
+COPY --from=builder /app/packages/auth/dist/ ./packages/auth/dist/
+COPY --from=builder /app/packages/auth/package.json ./packages/auth/
+# @packages/db
+COPY --from=builder /app/packages/db/dist/ ./packages/db/dist/
+COPY --from=builder /app/packages/db/package.json ./packages/db/
+# @packages/env
+COPY --from=builder /app/packages/env/dist/ ./packages/env/dist/
+COPY --from=builder /app/packages/env/package.json ./packages/env/
+
+USER bun
+CMD ["bun", "run", "start"]
+EXPOSE 4000
+```
+
+### Web Dockerfile
+
+The Next.js application uses a similar approach (`web/next/Dockerfile`):
+
+```dockerfile web/next/Dockerfile
+FROM oven/bun:latest AS base
+
+FROM base AS prepare
+WORKDIR /app
+RUN bun install --global turbo
+COPY . .
+RUN turbo prune @web/next --docker
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=prepare /app/.env .
+COPY --from=prepare /app/.github/ ./.github/
+COPY --from=prepare /app/out/json/ .
+COPY --from=prepare /app/out/bun.lock .
+RUN bun install --frozen-lockfile --ignore-scripts
+COPY --from=prepare /app/out/full/ .
+ENV NODE_ENV=production
+RUN bun run build
+
+FROM base AS runner
+WORKDIR /app
+COPY --from=builder /app/node_modules/ ./node_modules/
+# @web/next
+COPY --from=builder /app/web/next/.next/ ./.next/
+COPY --from=builder /app/web/next/package.json .
+COPY --from=builder /app/web/next/public/ ./public/
+# @api/hono
+COPY --from=builder /app/api/hono/dist/ ./api/hono/dist/
+COPY --from=builder /app/api/hono/package.json ./api/hono/
+# @packages/auth
+COPY --from=builder /app/packages/auth/dist/ ./packages/auth/dist/
+COPY --from=builder /app/packages/auth/package.json ./packages/auth/
+# @packages/env
+COPY --from=builder /app/packages/env/dist/ ./packages/env/dist/
+COPY --from=builder /app/packages/env/package.json ./packages/env/
+
+RUN mkdir -p .next && chown -R bun:bun .next
+
+USER bun
+CMD ["bun", "run", "start"]
+EXPOSE 3000
+```
+
+## Docker Compose Setup
+
+The included `docker-compose.yml` orchestrates both services:
+
+```yaml docker-compose.yml
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/hono/Dockerfile
+    env_file:
+      - .env
+    environment:
+      - INTERNAL_API_URL=http://api:4000
+    ports:
+      - "4000:4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: web/next/Dockerfile
+    env_file:
+      - .env
+    environment:
+      - INTERNAL_API_URL=http://api:4000
+    ports:
+      - "3000:3000"
+```
+
+## Deployment Steps
+
+### Local Development
+
+<Steps>
+  <Step title="Create environment file">
+    Copy the example environment file:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Update the variables with your configuration.
+  </Step>
+
+  <Step title="Build and start services">
+    ```bash
+    docker-compose up --build
+    ```
+
+    This will:
+    - Build both Docker images
+    - Start the API on port 4000
+    - Start the web app on port 3000
+  </Step>
+
+  <Step title="Run database migrations">
+    In a separate terminal:
+
+    ```bash
+    docker-compose exec api bun run db:migrate
+    ```
+  </Step>
+
+  <Step title="Access the application">
+    - Web app: http://localhost:3000
+    - API: http://localhost:4000
+  </Step>
+</Steps>
+
+### Production Deployment
+
+<Steps>
+  <Step title="Configure production environment">
+    Create a production `.env` file:
+
+    ```bash .env
+    NODE_ENV=production
+
+    # Server
+    HONO_APP_URL=https://api.yourdomain.com
+    HONO_TRUSTED_ORIGINS=https://yourdomain.com
+    HONO_RATE_LIMIT=60
+    HONO_RATE_LIMIT_WINDOW_MS=60000
+
+    # Auth
+    BETTER_AUTH_SECRET=your-production-secret
+
+    # Database
+    POSTGRES_URL=postgresql://user:pass@host:5432/db
+
+    # Client
+    NEXT_PUBLIC_APP_URL=https://yourdomain.com
+    NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+    ```
+  </Step>
+
+  <Step title="Build production images">
+    ```bash
+    docker-compose build --no-cache
+    ```
+  </Step>
+
+  <Step title="Run with production settings">
+    ```bash
+    docker-compose up -d
+    ```
+
+    The `-d` flag runs containers in detached mode.
+  </Step>
+
+  <Step title="Run migrations">
+    ```bash
+    docker-compose exec api bun run db:migrate
+    ```
+  </Step>
+
+  <Step title="Verify deployment">
+    Check container status:
+
+    ```bash
+    docker-compose ps
+    ```
+
+    View logs:
+
+    ```bash
+    docker-compose logs -f
+    ```
+  </Step>
+</Steps>
+
+## Build Optimization
+
+The Dockerfiles use several optimization techniques:
+
+### Multi-Stage Builds
+
+1. **Prepare stage** - Prunes monorepo using Turbo
+2. **Builder stage** - Installs dependencies and builds
+3. **Runner stage** - Minimal runtime image
+
+### Turbo Prune
+
+The `turbo prune` command creates a minimal subset of the monorepo:
+
+```bash
+turbo prune @api/hono --docker
+```
+
+This generates:
+- `out/json/` - Only required package.json files
+- `out/full/` - Only required source files
+- `out/bun.lock` - Lockfile
+
+### Layer Caching
+
+Dependencies are installed before copying source code:
+
+```dockerfile
+COPY --from=prepare /app/out/json/ .
+COPY --from=prepare /app/out/bun.lock .
+RUN bun install --frozen-lockfile --ignore-scripts
+COPY --from=prepare /app/out/full/ .
+```
+
+This ensures dependency layers are cached and only rebuilt when dependencies change.
+
+## Docker Ignore
+
+The `.dockerignore` file excludes unnecessary files:
+
+```gitignore .dockerignore
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+dist/
+.turbo/
+
+# Environment files
+.env*
+!.env*
+.env.example
+
+# Development
+*.log
+.DS_Store
+```
+
+## Environment Variables
+
+### Required for Both Services
+
+```bash
+NODE_ENV=production
+BETTER_AUTH_SECRET=your-secret
+POSTGRES_URL=your-postgres-url
+```
+
+### API Service
+
+```bash
+HONO_APP_URL=http://api:4000
+HONO_TRUSTED_ORIGINS=http://localhost:3000
+```
+
+### Web Service
+
+```bash
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_API_URL=http://localhost:4000
+INTERNAL_API_URL=http://api:4000
+```
+
+<Info>
+`INTERNAL_API_URL` is used for server-side communication between containers using Docker's internal network.
+</Info>
+
+## Docker Commands Reference
+
+### Build and Run
+
+```bash
+# Build images
+docker-compose build
+
+# Build without cache
+docker-compose build --no-cache
+
+# Start services
+docker-compose up
+
+# Start in background
+docker-compose up -d
+
+# Build and start
+docker-compose up --build
+```
+
+### Monitoring
+
+```bash
+# View logs
+docker-compose logs
+
+# Follow logs
+docker-compose logs -f
+
+# Logs for specific service
+docker-compose logs -f api
+
+# Container status
+docker-compose ps
+```
+
+### Maintenance
+
+```bash
+# Stop services
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
+
+# Restart service
+docker-compose restart api
+
+# Execute command in container
+docker-compose exec api bun run db:migrate
+```
+
+## Production Best Practices
+
+### Use Docker Secrets
+
+For sensitive data, use Docker secrets instead of environment variables:
+
+```yaml docker-compose.yml
+services:
+  api:
+    secrets:
+      - postgres_url
+      - auth_secret
+
+secrets:
+  postgres_url:
+    file: ./secrets/postgres_url.txt
+  auth_secret:
+    file: ./secrets/auth_secret.txt
+```
+
+### Health Checks
+
+Add health checks to your services:
+
+```yaml docker-compose.yml
+services:
+  api:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+### Resource Limits
+
+Set resource limits:
+
+```yaml docker-compose.yml
+services:
+  api:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+```
+
+### Logging
+
+Configure log rotation:
+
+```yaml docker-compose.yml
+services:
+  api:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+## Reverse Proxy Setup
+
+### Nginx Configuration
+
+```nginx nginx.conf
+upstream api {
+    server localhost:4000;
+}
+
+upstream web {
+    server localhost:3000;
+}
+
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    location / {
+        proxy_pass http://web;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+
+    location / {
+        proxy_pass http://api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Traefik Configuration
+
+```yaml docker-compose.yml
+services:
+  api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.yourdomain.com`)"
+      - "traefik.http.services.api.loadbalancer.server.port=4000"
+
+  web:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=Host(`yourdomain.com`)"
+      - "traefik.http.services.web.loadbalancer.server.port=3000"
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build fails with 'turbo not found'">
+    Ensure turbo is installed in the prepare stage:
+
+    ```dockerfile
+    RUN bun install --global turbo
+    ```
+  </Accordion>
+
+  <Accordion title="Permission denied errors">
+    The containers run as the `bun` user. Ensure proper permissions:
+
+    ```dockerfile
+    RUN mkdir -p .next && chown -R bun:bun .next
+    ```
+  </Accordion>
+
+  <Accordion title="Services can't communicate">
+    Use Docker's internal network names:
+
+    ```bash
+    INTERNAL_API_URL=http://api:4000
+    ```
+
+    Not `localhost:4000` when running in containers.
+  </Accordion>
+
+  <Accordion title="High build times">
+    Use BuildKit for faster builds:
+
+    ```bash
+    DOCKER_BUILDKIT=1 docker-compose build
+    ```
+
+    Or enable globally:
+
+    ```json /etc/docker/daemon.json
+    {
+      "features": {
+        "buildkit": true
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Production Checklist" icon="clipboard-check" href="/deployment/production-checklist">
+    Complete the production readiness checklist
+  </Card>
+  <Card title="Analytics & Monitoring" icon="chart-line" href="/features/analytics">
+    Set up PostHog analytics and monitoring
+  </Card>
+</CardGroup>

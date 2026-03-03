@@ -1,0 +1,295 @@
+---
+title: Frontend Overview
+description: Next.js 16 with React 19, modern tooling, and production-ready architecture
+---
+
+ZeroStarter's frontend is built with Next.js 16 and React 19, featuring the latest patterns including React Compiler, App Router, and Server Components. The architecture emphasizes type safety, performance, and developer experience.
+
+## Tech Stack
+
+The frontend leverages cutting-edge technologies:
+
+<CardGroup cols={2}>
+  <Card title="Next.js 16" icon="react">
+    Latest Next.js with App Router, Server Components, and React 19 support
+  </Card>
+  <Card title="React 19" icon="react">
+    React 19 with React Compiler for automatic optimizations
+  </Card>
+  <Card title="TypeScript" icon="code">
+    Full type safety across the entire application
+  </Card>
+  <Card title="Bun Runtime" icon="rocket">
+    Blazing fast development with Bun as the JavaScript runtime
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### React Compiler
+
+ZeroStarter enables React Compiler out of the box for automatic memoization:
+
+```ts title="next.config.ts"
+import type { NextConfig } from "next"
+
+const nextConfig: NextConfig = {
+  reactCompiler: true,
+  // ... other config
+}
+
+export default nextConfig
+```
+
+With React Compiler enabled, you don't need to manually use `useMemo`, `useCallback`, or `memo` in most cases. The compiler automatically optimizes your components.
+
+### App Router Architecture
+
+The project uses Next.js App Router with a well-organized structure:
+
+```
+src/app/
+├── (content)/        # Route group for docs and blog
+│   ├── blog/
+│   └── docs/
+├── (protected)/      # Protected routes requiring auth
+│   └── dashboard/
+├── api/              # API routes
+│   ├── og/          # Open Graph image generation
+│   └── search/      # Search endpoint
+├── layout.tsx        # Root layout
+├── page.tsx          # Home page
+└── providers.tsx     # Client providers
+```
+
+Route groups `(content)` and `(protected)` organize routes without affecting URLs.
+
+### Server Components by Default
+
+All components are Server Components unless marked with `"use client"`. This reduces JavaScript bundle size and improves performance:
+
+```tsx title="src/app/layout.tsx"
+import type { Metadata } from "next"
+import { Navbar } from "@/components/navbar/home"
+import { InnerProvider, OuterProvider } from "@/app/providers"
+
+export const metadata: Metadata = {
+  title: {
+    default: `${config.app.name} - ${config.app.tagline}`,
+    template: `%s | ${config.app.name}`,
+  },
+  // ... metadata configuration
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <OuterProvider>
+      <html lang="en" suppressHydrationWarning>
+        <body className="min-h-dvh antialiased">
+          <InnerProvider>
+            <Navbar />
+            {children}
+          </InnerProvider>
+        </body>
+      </html>
+    </OuterProvider>
+  )
+}
+```
+
+### Type-Safe API Client
+
+Full end-to-end type safety with Hono RPC:
+
+```tsx title="src/lib/api/client.ts"
+import type { AppType } from "@api/hono"
+import { hc } from "hono/client"
+import { config } from "@/lib/config"
+
+type Client = ReturnType<typeof hc<AppType>>
+
+const hcWithType = (...args: Parameters<typeof hc>): Client => hc<AppType>(...args)
+
+const url = config.api.internalUrl ? config.api.internalUrl : config.api.url
+
+const honoClient = hcWithType(url, {
+  init: {
+    credentials: "include",
+  },
+})
+
+export const apiClient = honoClient.api
+```
+
+Use it with full type inference:
+
+```tsx
+import { apiClient } from "@/lib/api/client"
+
+// TypeScript knows the exact response type!
+const res = await apiClient.health.$get()
+const { data } = await res.json()
+```
+
+## Project Structure
+
+```
+web/next/
+├── src/
+│   ├── app/              # Next.js App Router pages
+│   ├── components/       # React components
+│   │   ├── ui/          # Shadcn UI components
+│   │   ├── navbar/      # Navigation components
+│   │   └── sidebar/     # Sidebar components
+│   ├── hooks/           # Custom React hooks
+│   ├── lib/             # Utility functions and configs
+│   │   ├── api/         # API client setup
+│   │   └── auth/        # Auth client
+│   └── styles/          # Global styles
+├── public/              # Static assets
+├── components.json      # Shadcn UI config
+├── next.config.ts       # Next.js configuration
+├── package.json         # Dependencies
+└── tsconfig.json        # TypeScript config
+```
+
+## Path Aliases
+
+Clean imports with TypeScript path aliases:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+```
+
+Usage:
+
+```tsx
+// Instead of: import { Button } from "../../../components/ui/button"
+import { Button } from "@/components/ui/button"
+import { apiClient } from "@/lib/api/client"
+import { config } from "@/lib/config"
+```
+
+## Environment Variables
+
+Type-safe environment variables using `@packages/env`:
+
+```tsx title="next.config.ts"
+import { getSafeEnv } from "@packages/env"
+import { env } from "@packages/env/web-next"
+
+getSafeEnv(env, "@web/next")
+
+const nextConfig: NextConfig = {
+  // Access validated env vars
+  rewrites: async () => {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${env.NEXT_PUBLIC_API_URL}/api/:path*`,
+      },
+    ]
+  },
+}
+```
+
+## Performance Optimizations
+
+### Image Optimization
+
+Next.js Image component with automatic optimization:
+
+```tsx
+import Image from "next/image"
+
+<Image
+  src={tech.icon.light}
+  alt={tech.name}
+  fill
+  sizes="1.25rem"
+  className="block dark:hidden"
+/>
+```
+
+### Font Optimization
+
+Self-hosted fonts with automatic subsetting:
+
+```css title="globals.css"
+@import "@fontsource-variable/dm-sans";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/caveat";
+@import "@fontsource-variable/newsreader";
+```
+
+### Code Splitting
+
+Automatic code splitting with dynamic imports:
+
+```tsx
+import dynamic from "next/dynamic"
+
+const DevTools = dynamic(() => import("@/components/devtools"), {
+  ssr: false,
+})
+```
+
+## Development Workflow
+
+<Steps>
+  <Step title="Start Development Server">
+    ```bash
+    bun dev
+    ```
+    The Next.js dev server runs with fast refresh and React Compiler.
+  </Step>
+  
+  <Step title="Type Checking">
+    ```bash
+    bun run check-types
+    ```
+    Run TypeScript compiler to catch type errors.
+  </Step>
+  
+  <Step title="Build for Production">
+    ```bash
+    bun run build
+    ```
+    Creates optimized production build with automatic optimizations.
+  </Step>
+  
+  <Step title="Start Production Server">
+    ```bash
+    bun start
+    ```
+    Serves the production build locally.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Routing" icon="route" href="/frontend/routing">
+    Learn about Next.js App Router, route groups, and layouts
+  </Card>
+  <Card title="Components" icon="square-terminal" href="/frontend/components">
+    Explore Shadcn UI components and usage patterns
+  </Card>
+  <Card title="Data Fetching" icon="database" href="/frontend/data-fetching">
+    Master TanStack Query for server state management
+  </Card>
+  <Card title="Styling" icon="palette" href="/frontend/styling">
+    Understand Tailwind CSS configuration and patterns
+  </Card>
+</CardGroup>

@@ -1,0 +1,168 @@
+---
+title: Why ZeroStarter?
+description: Architecture & Best Practices as a Service — A complete blueprint for building production-ready SaaS applications
+---
+
+# Why Choose ZeroStarter?
+
+**Architecture & Best Practices as a Service** — ZeroStarter isn't just a starter template, it's a complete blueprint for building production-ready SaaS applications with battle-tested patterns and practices.
+
+## Core Advantages
+
+### Modular Architecture
+
+Clean, plug-and-play packages that work independently or together. Swap components, extend functionality, or customize without breaking the system.
+
+<Note>
+  The monorepo is organized with clear separation between API, web, and shared packages — making it easy to understand and maintain.
+</Note>
+
+```
+.
+├── api/
+│   └── hono/      # Backend API server (Hono)
+├── web/
+│   └── next/      # Frontend application (Next.js)
+└── packages/
+    ├── auth/      # Shared authentication logic (Better Auth)
+    ├── db/        # Database schema and Drizzle configuration
+    ├── env/       # Type-safe environment variables
+    └── tsconfig/  # Shared TypeScript configuration
+```
+
+### End-to-End Type Safety
+
+Hono RPC ensures type safety from database to frontend. Catch errors at compile time, ship with confidence.
+
+```ts
+import { apiClient } from "@/lib/api/client"
+
+// Backend routes are automatically typed on the frontend
+const res = await apiClient.health.$get()
+const { data } = await res.json()
+// TypeScript knows the exact shape of 'data'
+```
+
+**How it works:**
+- Backend routes defined in `api/hono/src/routers` are exported as `AppType`
+- Frontend client at `web/next/src/lib/api/client.ts` infers types using `hono/client`
+- No code generation required — types flow naturally from backend to frontend
+
+### Clean Code Practices
+
+Well-structured monorepo with separation of concerns, making it easy to understand, maintain, and scale.
+
+- **Convention over configuration**: Opinionated structure that guides you to best practices
+- **No unnecessary comments**: Code is self-documenting with clear naming and organization
+- **Consistent patterns**: Authentication, data fetching, and validation follow the same patterns throughout
+
+### Production-Ready Performance
+
+Optimized with Bun runtime and Turborepo for blazing-fast development and builds.
+
+- **Bun**: Modern JavaScript runtime that's faster than Node.js
+- **Turborepo**: Intelligent caching and parallel execution for monorepo tasks
+- **Optimized bundling**: Uses tsdown for efficient package bundling
+- **Fast linting & formatting**: Oxlint and Oxfmt for blazing-fast code quality checks
+
+### Beautiful UI Out of the Box
+
+Shadcn UI components with Tailwind CSS, ready to customize or use as-is.
+
+- **Pre-built components**: Forms, dialogs, dropdowns, and more
+- **Accessible**: Built on Radix UI primitives with ARIA support
+- **Customizable**: Easy to modify styles while maintaining consistency
+- **Dark mode**: Built-in theme switching with next-themes
+
+### Enterprise-Grade Authentication
+
+Better Auth integration with GitHub, Google, and more — fully configured and ready to extend.
+
+- **Multiple providers**: Social login with GitHub, Google, and more
+- **Session management**: Secure session handling out of the box
+- **Type-safe**: Full TypeScript support across auth flows
+- **Extensible**: Easy to add custom providers or authentication logic
+
+### Comprehensive Documentation
+
+Every pattern, practice, and decision documented with AI-optimized llms.txt.
+
+- **Human-readable docs**: Clear explanations for developers
+- **AI-optimized**: Special llms.txt format for AI assistants
+- **API documentation**: Auto-generated OpenAPI spec with Scalar at `/api/docs`
+- **Code examples**: Real-world examples throughout the documentation
+
+### Deploy-Ready
+
+Docker and Vercel configurations included, so you can ship to production in minutes, not days.
+
+<CardGroup cols={2}>
+  <Card title="Deploy to Vercel" icon="triangle" href="/deployment/vercel">
+    One-click deployment with optimized configuration
+  </Card>
+  
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Containerized deployment for any cloud provider
+  </Card>
+</CardGroup>
+
+## What Makes ZeroStarter Different?
+
+### Not Just Code, But Patterns
+
+Most starter templates give you code. ZeroStarter gives you **patterns** — proven approaches to common problems that you can apply throughout your application.
+
+- **Authentication flows**: Complete implementation from signup to password reset
+- **Data fetching**: TanStack Query patterns with proper error handling
+- **Form validation**: Zod schemas shared between frontend and backend
+- **Database queries**: Type-safe Drizzle ORM patterns
+
+### Battle-Tested Stack
+
+Every technology in ZeroStarter is chosen for production readiness:
+
+- **Next.js 16**: Industry-standard React framework
+- **Hono**: Lightweight, fast, and type-safe backend framework
+- **PostgreSQL**: Rock-solid relational database
+- **Drizzle ORM**: Modern, type-safe database toolkit
+- **Better Auth**: Secure authentication with great DX
+
+### Continuous Improvement
+
+ZeroStarter is actively maintained with regular updates:
+
+- **Active development**: New features and integrations added regularly
+- **Automated releases**: Detailed changelog with every release
+- **Community-driven**: Contributions welcome from the community
+- **Modern dependencies**: Always kept up-to-date with latest stable versions
+
+<Note>
+  Check out the [roadmap](/resources/roadmap) to see what's coming next!
+</Note>
+
+## Who Should Use ZeroStarter?
+
+### Perfect For
+
+- **Entrepreneurs** building their next SaaS product
+- **Development teams** starting new projects with best practices
+- **Developers** who want to learn modern full-stack patterns
+- **Agencies** shipping client projects faster
+
+### You'll Love It If You Value
+
+- **Type safety** and catching bugs at compile time
+- **Developer experience** with fast builds and clear patterns
+- **Production readiness** from day one
+- **Clean code** that's easy to maintain and extend
+- **Comprehensive documentation** that answers your questions
+
+## Get Started Today
+
+<Card title="Installation Guide" icon="rocket" href="/getting-started/installation">
+  Follow our step-by-step guide to get ZeroStarter running in minutes
+</Card>
+
+---
+
+**Ready to build your next SaaS?** ZeroStarter gives you the foundation, patterns, and tools you need to ship production-ready applications faster.

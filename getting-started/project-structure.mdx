@@ -1,0 +1,582 @@
+---
+title: Project Structure
+description: Comprehensive guide to ZeroStarter's monorepo organization and file structure
+---
+
+## Monorepo Overview
+
+ZeroStarter is organized as a monorepo using [Bun workspaces](https://bun.sh/docs/install/workspaces) and [Turborepo](https://turbo.build). This structure promotes code sharing, consistent tooling, and efficient development workflows.
+
+## Root Directory Structure
+
+```
+zerostarter/
+├── api/                    # Backend applications
+│   └── hono/              # Hono API server
+├── web/                    # Frontend applications  
+│   └── next/              # Next.js frontend
+├── packages/               # Shared packages
+│   ├── auth/              # Authentication logic
+│   ├── db/                # Database schema & client
+│   ├── env/               # Environment variables
+│   └── tsconfig/          # TypeScript configs
+├── .github/                # GitHub workflows & scripts
+├── .env.example            # Environment template
+├── package.json            # Root package config
+├── turbo.json              # Turborepo configuration
+├── bun.lock                # Dependency lock file
+└── README.md               # Project documentation
+```
+
+## Workspaces Configuration
+
+The monorepo is configured in the root `package.json`:
+
+```json
+{
+  "workspaces": [
+    "api/*",
+    "packages/*",
+    "web/*"
+  ]
+}
+```
+
+This allows:
+- Shared dependencies across workspaces
+- Internal package references using `workspace:*`
+- Single `bun install` for the entire monorepo
+
+## Backend: api/hono/
+
+The Hono backend API provides a type-safe REST API with authentication, rate limiting, and auto-generated documentation.
+
+### Directory Structure
+
+```
+api/hono/
+├── src/
+│   ├── index.ts           # Main app entry & AppType export
+│   ├── lib/               # Utilities and helpers
+│   ├── middlewares/       # Custom middleware
+│   └── routers/           # API route handlers
+├── dist/                  # Built output (generated)
+├── package.json           # Package configuration
+└── tsconfig.json          # TypeScript config
+```
+
+### Key Files
+
+<AccordionGroup>
+
+<Accordion title="src/index.ts - Application Entry Point">
+
+The main entry point that:
+- Initializes the Hono app
+- Registers middleware (CORS, rate limiting, etc.)
+- Mounts route handlers from `routers/`
+- Exports `AppType` for frontend type safety
+- Starts the server
+
+```typescript
+import { Hono } from 'hono'
+import type { AppType } from './index'
+
+const app = new Hono()
+
+// ... middleware and routes
+
+export type AppType = typeof app
+export default app
+```
+
+</Accordion>
+
+<Accordion title="src/routers/ - API Routes">
+
+Each file in `routers/` defines a set of related endpoints:
+
+- **Modular**: Group related endpoints together
+- **Type-Safe**: Export route types for frontend
+- **Composable**: Import and mount in main app
+
+Example structure:
+```
+routers/
+├── auth.ts        # Authentication endpoints
+├── users.ts       # User management
+└── health.ts      # Health check endpoint
+```
+
+</Accordion>
+
+<Accordion title="src/middlewares/ - Custom Middleware">
+
+Custom middleware for:
+- Authentication checks
+- Request validation
+- Error handling
+- Logging
+- Rate limiting
+
+</Accordion>
+
+</AccordionGroup>
+
+### Package Configuration
+
+```json package.json
+{
+  "name": "@api/hono",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "concurrently \"tsdown --watch\" \"bun --hot src/index.ts\"",
+    "start": "bun dist/index.mjs"
+  }
+}
+```
+
+**Scripts**:
+- `dev` - Development with hot reload
+- `build` - Bundle with tsdown
+- `start` - Run production build
+- `check-types` - TypeScript type checking
+
+## Frontend: web/next/
+
+The Next.js frontend provides the user interface with server components, client-side interactions, and type-safe API integration.
+
+### Directory Structure
+
+```
+web/next/
+├── src/
+│   ├── app/               # App Router pages
+│   │   ├── (content)/     # Content pages (docs, blog)
+│   │   ├── (protected)/   # Auth-protected pages
+│   │   ├── api/           # Next.js API routes
+│   │   ├── layout.tsx     # Root layout
+│   │   └── page.tsx       # Homepage
+│   ├── components/        # React components
+│   │   ├── ui/           # Shadcn UI components
+│   │   ├── navbar/       # Navigation components
+│   │   └── sidebar/      # Sidebar components
+│   ├── lib/              # Utilities and helpers
+│   │   ├── api/          # API client
+│   │   └── auth/         # Auth client
+│   ├── hooks/            # Custom React hooks
+│   └── mdx-components.tsx # MDX component overrides
+├── content/              # MDX content
+│   ├── docs/            # Documentation pages
+│   └── blog/            # Blog posts
+├── public/              # Static assets
+├── package.json         # Package configuration
+└── next.config.ts       # Next.js configuration
+```
+
+### Key Directories
+
+<AccordionGroup>
+
+<Accordion title="src/app/ - App Router">
+
+Next.js 13+ App Router with:
+
+**Route Groups**:
+- `(content)/` - Public content pages (docs, blog)
+- `(protected)/` - Authenticated pages (dashboard)
+- `(llms.txt)/` - AI-optimized documentation
+
+**Special Files**:
+- `layout.tsx` - Shared layout
+- `page.tsx` - Route component
+- `loading.tsx` - Loading state
+- `error.tsx` - Error boundary
+
+</Accordion>
+
+<Accordion title="src/components/ - React Components">
+
+**Organization**:
+- `ui/` - Shadcn UI components (Button, Card, etc.)
+- `navbar/` - Navigation and header components
+- `sidebar/` - Sidebar for docs and dashboard
+- `zeroui/` - Custom ZeroStarter components
+
+**Component Pattern**:
+```
+components/
+└── ui/
+    ├── button.tsx
+    ├── card.tsx
+    └── dialog.tsx
+```
+
+</Accordion>
+
+<Accordion title="src/lib/api/ - Type-Safe API Client">
+
+The Hono RPC client for type-safe API calls:
+
+```typescript
+// web/next/src/lib/api/client.ts
+import { hc } from 'hono/client'
+import type { AppType } from '@api/hono'
+
+export const apiClient = hc<AppType>(process.env.NEXT_PUBLIC_API_URL)
+```
+
+**Usage**:
+```typescript
+const res = await apiClient.health.$get()
+const data = await res.json() // Fully typed!
+```
+
+</Accordion>
+
+<Accordion title="content/ - MDX Content">
+
+MDX files for documentation and blog posts:
+
+```
+content/
+├── docs/
+│   ├── getting-started/
+│   ├── deployment/
+│   ├── manage/
+│   └── resources/
+└── blog/
+    └── posts...
+```
+
+**Powered by**: [Fumadocs](https://fumadocs.dev)
+
+</Accordion>
+
+</AccordionGroup>
+
+### Package Configuration
+
+```json package.json
+{
+  "name": "@web/next",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  }
+}
+```
+
+## Shared Packages: packages/
+
+Shared packages contain code used by both frontend and backend, promoting code reuse and consistency.
+
+### packages/auth/
+
+Authentication logic using Better Auth.
+
+```
+packages/auth/
+├── src/
+│   ├── index.ts           # Main auth export
+│   └── lib/               # Auth utilities
+├── dist/                  # Built output
+├── package.json
+└── tsconfig.json
+```
+
+**Exports**:
+- Auth configuration
+- Session management
+- OAuth provider setup
+
+**Dependencies**:
+- `better-auth`
+- `@packages/db` (for user storage)
+- `@packages/env` (for secrets)
+
+### packages/db/
+
+Database schema and Drizzle ORM client.
+
+```
+packages/db/
+├── src/
+│   ├── index.ts           # DB client export
+│   └── schema/            # Drizzle schemas
+│       ├── users.ts
+│       └── sessions.ts
+├── drizzle/               # Migrations
+│   └── meta/
+├── drizzle.config.ts      # Drizzle Kit config
+├── dist/                  # Built output
+└── package.json
+```
+
+**Key Files**:
+- `src/schema/` - Database table schemas
+- `drizzle.config.ts` - Migration configuration
+- `drizzle/` - Generated migration files
+
+**Commands** (from root):
+```bash
+bun run db:generate  # Generate migrations
+bun run db:migrate   # Apply migrations
+bun run db:studio    # Open Drizzle Studio
+```
+
+**Dependencies**:
+- `drizzle-orm` - ORM library
+- `drizzle-kit` - Migration tool
+- `postgres` - PostgreSQL driver
+
+### packages/env/
+
+Type-safe environment variable validation.
+
+```
+packages/env/
+├── src/
+│   ├── index.ts           # Common env vars
+│   ├── api-hono.ts        # Backend-specific
+│   ├── web-next.ts        # Frontend-specific
+│   ├── auth.ts            # Auth-specific
+│   ├── db.ts              # Database-specific
+│   └── lib/               # Utilities
+├── dist/                  # Built output
+└── package.json
+```
+
+**Exports**:
+```json
+{
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./api-hono": "./dist/api-hono.mjs",
+    "./web-next": "./dist/web-next.mjs",
+    "./auth": "./dist/auth.mjs",
+    "./db": "./dist/db.mjs"
+  }
+}
+```
+
+**Usage**:
+```typescript
+import { env } from '@packages/env/api-hono'
+
+console.log(env.HONO_APP_URL) // Type-safe!
+```
+
+**Dependencies**:
+- `@t3-oss/env-core` - Environment validation
+- `zod` - Schema validation
+- `dotenv` - Load .env files
+
+### packages/tsconfig/
+
+Shared TypeScript configurations.
+
+```
+packages/tsconfig/
+├── base.json              # Base config
+├── nextjs.json            # Next.js specific
+└── package.json
+```
+
+**Usage in workspaces**:
+```json tsconfig.json
+{
+  "extends": "@packages/tsconfig/nextjs.json"
+}
+```
+
+## Build System: Turborepo
+
+### Configuration
+
+The `turbo.json` at the project root configures build pipelines:
+
+```json turbo.json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
+```
+
+### Task Dependencies
+
+Turborepo automatically handles build order:
+
+```
+1. packages/env (no dependencies)
+2. packages/db (depends on env)
+3. packages/auth (depends on db, env)
+4. api/hono (depends on auth, env)
+5. web/next (depends on api/hono)
+```
+
+## Development Workflow
+
+### Starting Development
+
+```bash
+bun dev
+```
+
+This runs:
+1. `turbo run dev --ui tui`
+2. Starts all workspace dev servers
+3. Shows Turbo TUI with logs
+
+### Building for Production
+
+```bash
+bun run build
+```
+
+This:
+1. Builds packages in dependency order
+2. Uses Turbo's cache for unchanged packages
+3. Outputs to `dist/` and `.next/` directories
+
+### Adding Dependencies
+
+<CodeGroup>
+
+```bash Root (All Workspaces)
+# Add to root package.json
+bun add -d <package>
+```
+
+```bash Specific Workspace
+# Add to specific workspace
+bun add <package> --cwd packages/db
+```
+
+```bash Workspace Dependency
+# Reference another workspace
+# In package.json:
+"dependencies": {
+  "@packages/db": "workspace:*"
+}
+```
+
+</CodeGroup>
+
+## Internal Package References
+
+Workspaces can reference each other using `workspace:*`:
+
+```json
+{
+  "dependencies": {
+    "@packages/auth": "workspace:*",
+    "@packages/db": "workspace:*",
+    "@packages/env": "workspace:*"
+  }
+}
+```
+
+Benefits:
+- Always uses local version
+- No publishing required
+- Hot reload during development
+
+## File Naming Conventions
+
+### TypeScript Files
+
+- **Components**: `PascalCase.tsx` (e.g., `Button.tsx`)
+- **Utilities**: `kebab-case.ts` (e.g., `api-client.ts`)
+- **Routes**: `kebab-case.ts` or `route.ts`
+- **Config**: `*.config.ts`
+
+### React Components
+
+- **UI Components**: `button.tsx`, `card.tsx`
+- **Page Components**: `page.tsx`
+- **Layout Components**: `layout.tsx`
+
+### Directories
+
+- **Route Groups**: `(group-name)/`
+- **Features**: `kebab-case/`
+- **Components**: `kebab-case/`
+
+## Environment Files
+
+```
+.env.example        # Template with all variables
+.env                # Local development (gitignored)
+.env.local          # Next.js local override (gitignored)
+.env.production     # Production values (gitignored)
+```
+
+<Warning>
+Never commit `.env` files with secrets to version control!
+</Warning>
+
+## Generated Directories
+
+These are automatically generated and should be in `.gitignore`:
+
+```
+dist/              # Built package output (tsdown)
+.next/             # Next.js build output
+.turbo/            # Turborepo cache
+node_modules/      # Dependencies
+drizzle/meta/      # Drizzle migration metadata
+```
+
+## Best Practices
+
+### Organizing Code
+
+1. **Keep packages focused** - Each package should have a single responsibility
+2. **Use barrel exports** - Export from `index.ts` for clean imports
+3. **Colocate related code** - Keep components, hooks, and utils together
+4. **Shared code in packages** - Move reusable code to `packages/`
+
+### Import Paths
+
+```typescript
+// Use path aliases in Next.js
+import { Button } from '@/components/ui/button'
+
+// Use package names for shared code
+import { db } from '@packages/db'
+import { auth } from '@packages/auth'
+```
+
+### Type Safety
+
+- Export types from packages
+- Use `AppType` for API type safety
+- Validate env vars with Zod
+- Enable strict mode in `tsconfig.json`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Type-Safe API" icon="shield-check" href="/core-concepts/type-safe-api">
+    Learn how to use Hono RPC for type-safe API calls
+  </Card>
+  <Card title="Database" icon="database" href="/features/database">
+    Work with Drizzle ORM and database schema
+  </Card>
+  <Card title="Authentication" icon="lock" href="/features/authentication">
+    Implement authentication with Better Auth
+  </Card>
+  <Card title="Scripts" icon="terminal" href="/getting-started/scripts">
+    Explore available npm scripts and commands
+  </Card>
+</CardGroup>

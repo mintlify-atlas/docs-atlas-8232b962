@@ -1,0 +1,560 @@
+---
+title: Database
+description: Drizzle ORM setup, schema design, and database operations
+---
+
+ZeroStarter uses [Drizzle ORM](https://orm.drizzle.team) with PostgreSQL for type-safe database operations and schema management.
+
+## Architecture
+
+The database layer is centralized in the `@packages/db` workspace:
+
+```
+packages/db/
+├── src/
+│   ├── index.ts          # Database client and exports
+│   └── schema/
+│       ├── index.ts      # Schema barrel export
+│       └── auth.ts       # Better Auth schema
+├── drizzle/              # Generated migrations
+├── drizzle.config.ts     # Drizzle Kit configuration
+└── package.json
+```
+
+## Database Client
+
+### Client Setup
+
+The database client uses Bun's native PostgreSQL driver:
+
+```typescript title="packages/db/src/index.ts"
+import { env } from "@packages/env/db"
+import { SQL } from "bun"
+import type { BunSQLDatabase } from "drizzle-orm/bun-sql"
+import { drizzle } from "drizzle-orm/bun-sql"
+import * as schema from "@/schema"
+
+type Database = BunSQLDatabase<typeof schema>
+
+declare global {
+  var db: Database
+}
+
+let db: Database
+
+if (env.NODE_ENV === "production") {
+  const client = new SQL(env.POSTGRES_URL, {
+    connectionTimeout: 10,
+    idleTimeout: 30,
+    maxLifetime: 0,
+    tls: {
+      rejectUnauthorized: true,
+    },
+  })
+  db = drizzle({ client, schema })
+} else {
+  if (!global.db) {
+    const client = new SQL(env.POSTGRES_URL, {
+      connectionTimeout: 10,
+      idleTimeout: 30,
+      maxLifetime: 0,
+    })
+    global.db = drizzle({ client, schema })
+  }
+  db = global.db
+}
+
+export { db }
+export * from "@/schema"
+```
+
+<Note>
+The global variable pattern prevents creating multiple connections during development hot-reloads.
+</Note>
+
+### Connection Configuration
+
+**Production:**
+- TLS enabled with certificate verification
+- Short connection timeout (10s)
+- Auto-closes idle connections after 30s
+
+**Development:**
+- Reuses global connection across hot-reloads
+- No TLS required for local databases
+- Same timeout configuration
+
+## Schema Definition
+
+### Auth Schema
+
+Better Auth requires specific tables for authentication:
+
+<Tabs>
+  <Tab title="User">
+    ```typescript title="packages/db/src/schema/auth.ts"
+    export const user = pgTable("user", {
+      id: text("id").primaryKey(),
+      name: text("name").notNull(),
+      email: text("email").notNull().unique(),
+      emailVerified: boolean("email_verified").default(false).notNull(),
+      image: text("image"),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at")
+        .defaultNow()
+        .$onUpdate(() => new Date())
+        .notNull(),
+    })
+    ```
+  </Tab>
+  
+  <Tab title="Session">
+    ```typescript
+    export const session = pgTable(
+      "session",
+      {
+        id: text("id").primaryKey(),
+        expiresAt: timestamp("expires_at").notNull(),
+        token: text("token").notNull().unique(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at")
+          .$onUpdate(() => new Date())
+          .notNull(),
+        ipAddress: text("ip_address"),
+        userAgent: text("user_agent"),
+        userId: text("user_id")
+          .notNull()
+          .references(() => user.id, { onDelete: "cascade" }),
+        activeOrganizationId: text("active_organization_id"),
+        activeTeamId: text("active_team_id"),
+      },
+      (table) => [index("session_userId_idx").on(table.userId)]
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Account">
+    ```typescript
+    export const account = pgTable(
+      "account",
+      {
+        id: text("id").primaryKey(),
+        accountId: text("account_id").notNull(),
+        providerId: text("provider_id").notNull(),
+        userId: text("user_id")
+          .notNull()
+          .references(() => user.id, { onDelete: "cascade" }),
+        accessToken: text("access_token"),
+        refreshToken: text("refresh_token"),
+        idToken: text("id_token"),
+        accessTokenExpiresAt: timestamp("access_token_expires_at"),
+        refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+        scope: text("scope"),
+        password: text("password"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at")
+          .$onUpdate(() => new Date())
+          .notNull(),
+      },
+      (table) => [index("account_userId_idx").on(table.userId)]
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Organization">
+    ```typescript
+    export const organization = pgTable(
+      "organization",
+      {
+        id: text("id").primaryKey(),
+        name: text("name").notNull(),
+        slug: text("slug").notNull().unique(),
+        logo: text("logo"),
+        createdAt: timestamp("created_at").notNull(),
+        metadata: text("metadata"),
+      },
+      (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)]
+    )
+    
+    export const member = pgTable(
+      "member",
+      {
+        id: text("id").primaryKey(),
+        organizationId: text("organization_id")
+          .notNull()
+          .references(() => organization.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+          .notNull()
+          .references(() => user.id, { onDelete: "cascade" }),
+        role: text("role").default("member").notNull(),
+        createdAt: timestamp("created_at").notNull(),
+      },
+      (table) => [
+        index("member_organizationId_idx").on(table.organizationId),
+        index("member_userId_idx").on(table.userId),
+      ]
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Relations
+
+Drizzle relations enable type-safe joins:
+
+```typescript title="packages/db/src/schema/auth.ts"
+import { relations } from "drizzle-orm"
+
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account),
+  teamMembers: many(teamMember),
+  members: many(member),
+  invitations: many(invitation),
+}))
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id],
+  }),
+}))
+
+export const organizationRelations = relations(organization, ({ many }) => ({
+  teams: many(team),
+  members: many(member),
+  invitations: many(invitation),
+}))
+```
+
+## Database Operations
+
+### Querying Data
+
+<CodeGroup>
+
+```typescript Select
+import { db, user } from "@packages/db"
+import { eq } from "drizzle-orm"
+
+// Find user by email
+const result = await db
+  .select()
+  .from(user)
+  .where(eq(user.email, "admin@example.com"))
+  .limit(1)
+
+const foundUser = result[0]
+```
+
+```typescript Insert
+import { db, user } from "@packages/db"
+
+// Create new user
+const newUser = await db
+  .insert(user)
+  .values({
+    id: generateId(),
+    name: "John Doe",
+    email: "john@example.com",
+    emailVerified: false,
+  })
+  .returning()
+```
+
+```typescript Update
+import { db, user } from "@packages/db"
+import { eq } from "drizzle-orm"
+
+// Update user
+await db
+  .update(user)
+  .set({ emailVerified: true })
+  .where(eq(user.id, userId))
+```
+
+```typescript Delete
+import { db, session } from "@packages/db"
+import { lt } from "drizzle-orm"
+
+// Delete expired sessions
+await db
+  .delete(session)
+  .where(lt(session.expiresAt, new Date()))
+```
+
+</CodeGroup>
+
+### Relational Queries
+
+Query with relations:
+
+```typescript
+import { db, user } from "@packages/db"
+import { eq } from "drizzle-orm"
+
+// Get user with sessions and accounts
+const userWithRelations = await db.query.user.findFirst({
+  where: eq(user.id, userId),
+  with: {
+    sessions: true,
+    accounts: true,
+    members: {
+      with: {
+        organization: true,
+      },
+    },
+  },
+})
+```
+
+### Transactions
+
+Ensure atomicity with transactions:
+
+```typescript
+import { db, user, organization, member } from "@packages/db"
+
+await db.transaction(async (tx) => {
+  // Create organization
+  const [org] = await tx
+    .insert(organization)
+    .values({
+      id: generateId(),
+      name: "Acme Inc",
+      slug: "acme",
+      createdAt: new Date(),
+    })
+    .returning()
+
+  // Add user as owner
+  await tx.insert(member).values({
+    id: generateId(),
+    organizationId: org.id,
+    userId: userId,
+    role: "owner",
+    createdAt: new Date(),
+  })
+})
+```
+
+## Migrations
+
+### Drizzle Kit Configuration
+
+```typescript title="packages/db/drizzle.config.ts"
+import { env } from "@packages/env/db"
+import { defineConfig } from "drizzle-kit"
+
+export default defineConfig({
+  dialect: "postgresql",
+  dbCredentials: {
+    url: env.POSTGRES_URL,
+  },
+  schema: "src/schema",
+  out: "drizzle",
+})
+```
+
+### Generating Migrations
+
+Create a migration from schema changes:
+
+```bash
+bun db:generate
+```
+
+This:
+1. Builds `@packages/env` (required for database URL)
+2. Compares current schema to database
+3. Generates SQL migration in `drizzle/` directory
+
+### Applying Migrations
+
+Run pending migrations:
+
+```bash
+bun db:migrate
+```
+
+### Drizzle Studio
+
+Open the visual database browser:
+
+```bash
+bun db:studio
+```
+
+Access at `https://local.drizzle.studio`
+
+## Type Safety
+
+### Inferred Types
+
+Drizzle automatically infers TypeScript types from schema:
+
+```typescript
+import { type InferSelectModel, type InferInsertModel } from "drizzle-orm"
+import { user } from "@packages/db"
+
+// Type for selecting from database
+type User = InferSelectModel<typeof user>
+// { id: string, name: string, email: string, ... }
+
+// Type for inserting to database
+type NewUser = InferInsertModel<typeof user>
+// { id: string, name: string, email: string, emailVerified?: boolean, ... }
+```
+
+### Query Result Types
+
+Query results are fully typed:
+
+```typescript
+const users = await db.select().from(user)
+// users: Array<User>
+
+const userWithSessions = await db.query.user.findFirst({
+  with: { sessions: true },
+})
+// userWithSessions: { id: string, name: string, ..., sessions: Array<Session> }
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use indexes for frequently queried columns">
+    Add indexes to improve query performance:
+    
+    ```typescript
+    export const session = pgTable(
+      "session",
+      { /* columns */ },
+      (table) => [index("session_userId_idx").on(table.userId)]
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Set onDelete behavior for foreign keys">
+    Ensure data integrity with cascade deletes:
+    
+    ```typescript
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" })
+    ```
+  </Accordion>
+  
+  <Accordion title="Use $onUpdate for automatic timestamps">
+    Auto-update timestamps on row changes:
+    
+    ```typescript
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => new Date())
+      .notNull()
+    ```
+  </Accordion>
+  
+  <Accordion title="Prefer prepared statements for repeated queries">
+    Cache query execution plans:
+    
+    ```typescript
+    const getUserById = db
+      .select()
+      .from(user)
+      .where(eq(user.id, placeholder("id")))
+      .prepare("get_user_by_id")
+    
+    const user = await getUserById.execute({ id: userId })
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Environment Variables
+
+Required database configuration:
+
+```bash title=".env"
+POSTGRES_URL=postgresql://user:password@localhost:5432/zerostarter
+```
+
+For production with connection pooling:
+
+```bash
+POSTGRES_URL=postgresql://user:password@db.example.com:5432/production?sslmode=require
+```
+
+## Local Development
+
+### Docker Compose
+
+Run PostgreSQL locally:
+
+```yaml title="docker-compose.yml"
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: zerostarter
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+Start database:
+
+```bash
+docker-compose up -d
+```
+
+## Schema Visualization
+
+The auth schema relationships:
+
+```mermaid
+erDiagram
+    user ||--o{ session : has
+    user ||--o{ account : has
+    user ||--o{ member : has
+    organization ||--o{ member : has
+    organization ||--o{ team : has
+    organization ||--o{ invitation : sends
+    team ||--o{ teamMember : has
+    user ||--o{ teamMember : has
+```
+
+## Advanced Usage
+
+### Custom Column Types
+
+Create reusable column definitions:
+
+```typescript
+import { customType } from "drizzle-orm/pg-core"
+
+const jsonb = <T>() =>
+  customType<{ data: T; driverData: string }>({
+    dataType: () => "jsonb",
+    toDriver: (value: T): string => JSON.stringify(value),
+    fromDriver: (value: string): T => JSON.parse(value),
+  })
+
+export const metadata = pgTable("metadata", {
+  id: text("id").primaryKey(),
+  data: jsonb<{ theme: string; locale: string }>()("data"),
+})
+```
+
+### Query Logging
+
+Enable query logging in development:
+
+```typescript
+const db = drizzle({ client, schema, logger: true })
+```

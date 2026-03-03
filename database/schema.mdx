@@ -1,0 +1,353 @@
+---
+title: Schema Definition
+description: Drizzle ORM schema definitions for tables and relations
+---
+
+ZeroStarter uses [Drizzle ORM](https://orm.drizzle.team/) with PostgreSQL for type-safe database operations. All schema definitions are located in `packages/db/src/schema/`.
+
+## Database Connection
+
+The database connection is configured in `packages/db/src/index.ts` using Bun's SQL adapter:
+
+```typescript packages/db/src/index.ts
+import { env } from "@packages/env/db"
+import { SQL } from "bun"
+import type { BunSQLDatabase } from "drizzle-orm/bun-sql"
+import { drizzle } from "drizzle-orm/bun-sql"
+import * as schema from "@/schema"
+
+const client = new SQL(env.POSTGRES_URL, {
+  connectionTimeout: 10,
+  idleTimeout: 30,
+  maxLifetime: 0,
+  tls: {
+    rejectUnauthorized: true,
+  },
+})
+
+export const db = drizzle({ client, schema })
+```
+
+In development, the connection uses global caching to prevent hot-reload issues.
+
+## Tables
+
+### User Table
+
+Stores user account information:
+
+```typescript packages/db/src/schema/auth.ts
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  image: text("image"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+})
+```
+
+### Session Table
+
+Manages user sessions with device tracking:
+
+```typescript packages/db/src/schema/auth.ts
+export const session = pgTable(
+  "session",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at").notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => new Date())
+      .notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    activeOrganizationId: text("active_organization_id"),
+    activeTeamId: text("active_team_id"),
+  },
+  (table) => [index("session_userId_idx").on(table.userId)],
+)
+```
+
+### Account Table
+
+Stores OAuth provider credentials:
+
+```typescript packages/db/src/schema/auth.ts
+export const account = pgTable(
+  "account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at"),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("account_userId_idx").on(table.userId)],
+)
+```
+
+### Verification Table
+
+Handles email verification and password reset tokens:
+
+```typescript packages/db/src/schema/auth.ts
+export const verification = pgTable(
+  "verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("verification_identifier_idx").on(table.identifier)],
+)
+```
+
+### Organization Table
+
+Manages multi-tenant organizations:
+
+```typescript packages/db/src/schema/auth.ts
+export const organization = pgTable(
+  "organization",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    logo: text("logo"),
+    createdAt: timestamp("created_at").notNull(),
+    metadata: text("metadata"),
+  },
+  (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
+)
+```
+
+### Team Table
+
+Organization sub-groups:
+
+```typescript packages/db/src/schema/auth.ts
+export const team = pgTable(
+  "team",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
+  },
+  (table) => [index("team_organizationId_idx").on(table.organizationId)],
+)
+```
+
+### Member Table
+
+Organization membership with roles:
+
+```typescript packages/db/src/schema/auth.ts
+export const member = pgTable(
+  "member",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role").default("member").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (table) => [
+    index("member_organizationId_idx").on(table.organizationId),
+    index("member_userId_idx").on(table.userId),
+  ],
+)
+```
+
+### Team Member Table
+
+Team membership junction table:
+
+```typescript packages/db/src/schema/auth.ts
+export const teamMember = pgTable(
+  "team_member",
+  {
+    id: text("id").primaryKey(),
+    teamId: text("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    index("teamMember_teamId_idx").on(table.teamId),
+    index("teamMember_userId_idx").on(table.userId),
+  ],
+)
+```
+
+### Invitation Table
+
+Pending organization invitations:
+
+```typescript packages/db/src/schema/auth.ts
+export const invitation = pgTable(
+  "invitation",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: text("role"),
+    teamId: text("team_id"),
+    status: text("status").default("pending").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    inviterId: text("inviter_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    index("invitation_organizationId_idx").on(table.organizationId),
+    index("invitation_email_idx").on(table.email),
+  ],
+)
+```
+
+## Relations
+
+Drizzle relations enable type-safe joins and eager loading:
+
+### User Relations
+
+```typescript packages/db/src/schema/auth.ts
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account),
+  teamMembers: many(teamMember),
+  members: many(member),
+  invitations: many(invitation),
+}))
+```
+
+### Organization Relations
+
+```typescript packages/db/src/schema/auth.ts
+export const organizationRelations = relations(organization, ({ many }) => ({
+  teams: many(team),
+  members: many(member),
+  invitations: many(invitation),
+}))
+```
+
+### Team Relations
+
+```typescript packages/db/src/schema/auth.ts
+export const teamRelations = relations(team, ({ one, many }) => ({
+  organization: one(organization, {
+    fields: [team.organizationId],
+    references: [organization.id],
+  }),
+  teamMembers: many(teamMember),
+}))
+```
+
+All other relations (session, account, member, teamMember, invitation) follow similar patterns using `one()` for foreign key references.
+
+## Key Features
+
+### Automatic Timestamps
+
+Most tables use `$onUpdate()` for automatic timestamp updates:
+
+```typescript
+updatedAt: timestamp("updated_at")
+  .$onUpdate(() => new Date())
+  .notNull()
+```
+
+### Cascade Deletes
+
+Foreign keys use `onDelete: "cascade"` to maintain referential integrity:
+
+```typescript
+userId: text("user_id")
+  .notNull()
+  .references(() => user.id, { onDelete: "cascade" })
+```
+
+### Indexes
+
+Tables define indexes on frequently queried foreign keys:
+
+```typescript
+(table) => [
+  index("session_userId_idx").on(table.userId)
+]
+```
+
+## Better Auth Integration
+
+The schema is used with [Better Auth](https://better-auth.com/) via the Drizzle adapter:
+
+```typescript packages/auth/src/index.ts
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { organization as organizationPlugin } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: {
+      account,
+      invitation,
+      member,
+      organization,
+      session,
+      team,
+      teamMember,
+      user,
+      verification,
+    },
+  }),
+  plugins: [
+    organizationPlugin({
+      teams: { enabled: true },
+    }),
+  ],
+})
+```
+
+This integration provides built-in authentication, authorization, and organization management.

@@ -1,0 +1,281 @@
+---
+title: Migrations
+description: Database migration workflow using Drizzle Kit
+---
+
+ZeroStarter uses [Drizzle Kit](https://orm.drizzle.team/kit-docs/overview) to manage database migrations. All migration operations are executed from the `packages/db` directory.
+
+## Configuration
+
+Migration settings are defined in `drizzle.config.ts`:
+
+```typescript packages/db/drizzle.config.ts
+import { env } from "@packages/env/db"
+import { defineConfig } from "drizzle-kit"
+
+export default defineConfig({
+  dialect: "postgresql",
+  dbCredentials: {
+    url: env.POSTGRES_URL,
+  },
+  schema: "src/schema",
+  out: "drizzle",
+})
+```
+
+### Configuration Options
+
+- **dialect**: Database type (PostgreSQL)
+- **dbCredentials.url**: Connection string from environment variable
+- **schema**: Directory containing schema definitions (`src/schema`)
+- **out**: Output directory for generated migrations (`drizzle/`)
+
+## Environment Setup
+
+Ensure `POSTGRES_URL` is set in your environment:
+
+```bash .env
+POSTGRES_URL=postgresql://user:password@localhost:5432/dbname
+```
+
+The environment variable is validated through the `@packages/env/db` package.
+
+## Migration Workflow
+
+### 1. Generate Migrations
+
+After modifying schema files in `packages/db/src/schema/`, generate migration files:
+
+```bash
+bun db:generate
+```
+
+This command:
+1. Builds the `@packages/env` dependency
+2. Runs `drizzle-kit generate` in the `packages/db` directory
+3. Creates SQL migration files in `packages/db/drizzle/`
+
+**Full command:**
+```bash
+turbo run build --filter=@packages/env && bun --cwd packages/db drizzle-kit generate
+```
+
+### 2. Review Generated SQL
+
+Migration files are created in `packages/db/drizzle/` with timestamps:
+
+```
+packages/db/drizzle/
+├── 0000_initial_schema.sql
+├── 0001_add_user_table.sql
+└── meta/
+    └── _journal.json
+```
+
+Review the SQL to ensure it matches your intentions:
+
+```sql packages/db/drizzle/0000_initial_schema.sql
+CREATE TABLE "user" (
+  "id" text PRIMARY KEY NOT NULL,
+  "name" text NOT NULL,
+  "email" text NOT NULL UNIQUE,
+  "email_verified" boolean DEFAULT false NOT NULL,
+  "image" text,
+  "created_at" timestamp DEFAULT now() NOT NULL,
+  "updated_at" timestamp DEFAULT now() NOT NULL
+);
+```
+
+### 3. Apply Migrations
+
+Run migrations against your database:
+
+```bash
+bun db:migrate
+```
+
+This command:
+1. Builds the `@packages/env` dependency
+2. Runs `drizzle-kit migrate` in the `packages/db` directory
+3. Executes all pending migrations
+
+**Full command:**
+```bash
+turbo run build --filter=@packages/env && bun --cwd packages/db drizzle-kit migrate
+```
+
+## Drizzle Studio
+
+Inspect and modify your database using Drizzle Studio:
+
+```bash
+bun db:studio
+```
+
+This opens a web interface at `https://local.drizzle.studio` where you can:
+- Browse tables and data
+- Execute queries
+- View relationships
+- Edit records
+
+**Full command:**
+```bash
+turbo run build --filter=@packages/env && bun --cwd packages/db drizzle-kit studio
+```
+
+## Common Workflows
+
+### Adding a New Table
+
+1. Define the table in `packages/db/src/schema/`:
+
+```typescript packages/db/src/schema/posts.ts
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { user } from "./auth"
+
+export const post = pgTable("post", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  authorId: text("author_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+```
+
+2. Export from `packages/db/src/schema/index.ts`:
+
+```typescript packages/db/src/schema/index.ts
+export * from "@/schema/auth"
+export * from "@/schema/posts"
+```
+
+3. Generate and apply migration:
+
+```bash
+bun db:generate
+bun db:migrate
+```
+
+### Modifying Existing Tables
+
+1. Update the schema definition:
+
+```typescript packages/db/src/schema/auth.ts
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  image: text("image"),
+  bio: text("bio"), // New field
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+})
+```
+
+2. Generate migration:
+
+```bash
+bun db:generate
+```
+
+3. Review the generated SQL for ALTER statements
+
+4. Apply migration:
+
+```bash
+bun db:migrate
+```
+
+### Rolling Back Migrations
+
+Drizzle Kit doesn't have built-in rollback. To revert changes:
+
+1. **Manual SQL**: Write and execute reverse migration SQL
+2. **Database restore**: Restore from backup
+3. **Delete migration files**: Remove migration files and regenerate from schema
+
+## Production Migrations
+
+### CI/CD Integration
+
+Run migrations in your deployment pipeline:
+
+```yaml .github/workflows/deploy.yml
+- name: Run migrations
+  run: bun db:migrate
+  env:
+    POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+```
+
+### Best Practices
+
+1. **Always review generated SQL** before applying migrations
+2. **Test migrations** on a staging database first
+3. **Backup production** before running migrations
+4. **Use transactions** for complex migrations (Drizzle Kit handles this)
+5. **Version control** all migration files
+6. **Never modify** existing migration files after they've been applied
+
+## Troubleshooting
+
+### Migration Out of Sync
+
+If your database schema doesn't match your code:
+
+```bash
+bun db:generate
+```
+
+Drizzle Kit will detect differences and generate appropriate migrations.
+
+### Connection Issues
+
+Verify your database connection:
+
+```bash
+echo $POSTGRES_URL
+```
+
+Ensure the format is:
+```
+postgresql://username:password@host:port/database
+```
+
+### Schema Import Errors
+
+The schema uses path aliases (`@/schema`). Ensure `tsconfig.json` includes:
+
+```json packages/db/tsconfig.json
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+```
+
+## Migration Files Structure
+
+```
+packages/db/
+├── drizzle/              # Generated migrations
+│   ├── 0000_*.sql
+│   ├── 0001_*.sql
+│   └── meta/
+│       ├── _journal.json # Migration history
+│       └── 0000_snapshot.json
+├── src/
+│   └── schema/          # Source of truth
+│       ├── auth.ts
+│       └── index.ts
+└── drizzle.config.ts    # Migration config
+```
+
+The `meta/_journal.json` file tracks applied migrations and prevents duplicate runs.

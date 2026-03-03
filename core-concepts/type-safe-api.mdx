@@ -1,0 +1,439 @@
+---
+title: Type-Safe API Client
+description: End-to-end type safety with Hono RPC and client usage patterns
+---
+
+ZeroStarter uses Hono's RPC client to achieve complete type safety between your API server and frontend with zero code generation or build steps.
+
+## How It Works
+
+The type-safe API client works by:
+
+1. Exporting the API route type from Hono server
+2. Importing that type in the frontend
+3. Using Hono's `hc` (Hono Client) with the type parameter
+
+No OpenAPI specs, no code generation, just TypeScript.
+
+## API Server Setup
+
+### Defining Routes
+
+The Hono API exports its route structure as a TypeScript type:
+
+```typescript title="api/hono/src/index.ts"
+import { Hono } from "hono"
+import { authRouter, v1Router } from "@/routers"
+
+const app = new Hono()
+
+const routes = app
+  .get("/", (c) => {
+    const data = { version: BUILD_VERSION, environment: env.NODE_ENV }
+    return c.json({ data })
+  })
+  .basePath("/api")
+  .get("/health", (c) => {
+    const data = { message: "ok", version: BUILD_VERSION, environment: env.NODE_ENV }
+    return c.json({ data })
+  })
+  .route("/auth", authRouter)
+  .route("/v1", v1Router)
+
+export type AppType = typeof routes
+```
+
+The `AppType` export contains all route information including paths, methods, request/response types.
+
+### Protected Routes
+
+Protected routes use middleware to add session context:
+
+```typescript title="api/hono/src/routers/v1.ts"
+import type { Session } from "@packages/auth"
+import { Hono } from "hono"
+import { authMiddleware } from "@/middlewares"
+
+export const v1Router = new Hono<{
+  Variables: Session
+}>()
+  .use("/*", authMiddleware)
+  .get("/session", (c) => {
+    const data = c.get("session")
+    return c.json({ data })
+  })
+  .get("/user", (c) => {
+    const data = c.get("user")
+    return c.json({ data })
+  })
+```
+
+### Authentication Middleware
+
+The auth middleware validates sessions and adds user context:
+
+```typescript title="api/hono/src/middlewares/auth.ts"
+import type { Session } from "@packages/auth"
+import { auth } from "@packages/auth"
+import { createMiddleware } from "hono/factory"
+
+export const authMiddleware = createMiddleware<{ Variables: Session }>(
+  async (c, next) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+
+    if (!session) {
+      return c.json(
+        { error: { code: "UNAUTHORIZED", message: "Unauthorized" } },
+        401
+      )
+    }
+
+    c.set("session", session.session)
+    c.set("user", session.user)
+
+    return next()
+  }
+)
+```
+
+## Client Setup
+
+### Creating the Client
+
+The frontend imports the API type and creates a typed client:
+
+```typescript title="web/next/src/lib/api/client.ts"
+import type { AppType } from "@api/hono"
+import { hc } from "hono/client"
+import { config } from "@/lib/config"
+
+type Client = ReturnType<typeof hc<AppType>>
+
+const hcWithType = (...args: Parameters<typeof hc>): Client => 
+  hc<AppType>(...args)
+
+const url = config.api.internalUrl ? config.api.internalUrl : config.api.url
+
+const honoClient = hcWithType(url, {
+  init: {
+    credentials: "include",
+  },
+})
+
+export const apiClient = honoClient.api
+```
+
+<Note>
+The `credentials: "include"` option ensures cookies (including auth sessions) are sent with requests.
+</Note>
+
+### Internal vs External URLs
+
+The client supports both internal (server-side) and external (client-side) API URLs:
+
+```typescript title="web/next/src/lib/config.ts"
+const getInternalApiUrl = () => {
+  if (typeof window === "undefined") {
+    return env.INTERNAL_API_URL
+  }
+  return undefined
+}
+
+export const config = {
+  api: {
+    url: env.NEXT_PUBLIC_API_URL,
+    internalUrl: getInternalApiUrl(),
+  },
+}
+```
+
+This allows server components to use internal Docker networking while client components use public URLs.
+
+## Client Usage
+
+### Making Requests
+
+The client provides full autocomplete and type checking:
+
+<CodeGroup>
+
+```typescript Client Component
+"use client"
+
+import { useQuery } from "@tanstack/react-query"
+import { apiClient } from "@/lib/api/client"
+
+export function ApiStatus() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["api-health"],
+    queryFn: async () => {
+      const res = await apiClient.health.$get()
+      if (!res.ok) {
+        throw new Error("Systems are facing issues")
+      }
+      return res.json()
+    },
+    refetchInterval: 30000,
+  })
+
+  // data is fully typed: { data: { message: string, version: string, environment: string } }
+}
+```
+
+```typescript Server Component
+import { apiClient } from "@/lib/api/client"
+
+export default async function Page() {
+  const response = await apiClient.v1.session.$get()
+  const { data } = await response.json()
+  
+  // data is typed as Session
+  return <div>{data.userId}</div>
+}
+```
+
+</CodeGroup>
+
+### Protected Routes
+
+Client-side requests to protected routes require authentication:
+
+```typescript title="web/next/src/components/user-profile.tsx"
+"use client"
+
+import { useQuery } from "@tanstack/react-query"
+import { apiClient } from "@/lib/api/client"
+
+export function UserProfile() {
+  const { data } = useQuery({
+    queryKey: ["user"],
+    queryFn: async () => {
+      const response = await apiClient.v1.user.$get()
+      if (!response.ok) throw new Error("Failed to fetch user")
+      return response.json()
+    },
+  })
+
+  return <div>{data?.data.name}</div>
+}
+```
+
+### Server-Side Session Check
+
+Server components can validate sessions using the auth helper:
+
+```typescript title="web/next/src/lib/auth/index.ts"
+import type { Session } from "@packages/auth"
+import { headers } from "next/headers"
+import { apiClient } from "@/lib/api/client"
+
+export const auth = {
+  api: {
+    getSession: async () => {
+      try {
+        const response = await apiClient.auth["get-session"].$get(
+          undefined,
+          {
+            headers: Object.fromEntries((await headers()).entries()),
+          }
+        )
+        if (!response.ok) return null
+        const text = await response.text()
+        if (!text) return null
+        return JSON.parse(text) as Session | null
+      } catch {
+        return null
+      }
+    },
+  },
+}
+```
+
+Usage in layout or page:
+
+```typescript title="app/(protected)/layout.tsx"
+import { redirect } from "next/navigation"
+import { auth } from "@/lib/auth"
+
+export default async function Layout({ children }) {
+  const session = await auth.api.getSession()
+
+  if (!session?.user) redirect("/")
+
+  return <>{children}</>
+}
+```
+
+## Type Safety Benefits
+
+### Request Type Checking
+
+The client validates request parameters at compile time:
+
+```typescript
+// TypeScript error: Property 'invalidParam' does not exist
+await apiClient.v1.session.$get({ invalidParam: true })
+
+// TypeScript error: Expected 0 arguments, but got 1
+await apiClient.health.$get({ query: { foo: "bar" } })
+```
+
+### Response Type Inference
+
+Response types are automatically inferred:
+
+```typescript
+const response = await apiClient.health.$get()
+const { data } = await response.json()
+
+// data.message is string
+// data.version is string  
+// data.environment is "local" | "development" | "test" | "staging" | "production"
+```
+
+### Auto-complete for Paths
+
+IDEs provide full autocomplete for all available routes:
+
+```typescript
+apiClient.
+  // Autocomplete shows:
+  // - health
+  // - auth
+  // - v1
+```
+
+## OpenAPI Integration
+
+While Hono RPC provides TypeScript types, you can also generate OpenAPI specs for documentation:
+
+```typescript title="api/hono/src/index.ts"
+import { describeRoute, resolver, openAPIRouteHandler } from "hono-openapi"
+import { z } from "zod"
+
+const routes = app.get(
+  "/health",
+  describeRoute({
+    tags: ["System"],
+    description: "Get the system health",
+    responses: {
+      200: {
+        description: "OK",
+        content: {
+          "application/json": {
+            schema: resolver(
+              z.object({
+                data: z.object({
+                  environment: z.enum(["local", "development", "test", "staging", "production"]),
+                  message: z.string(),
+                  version: z.string(),
+                }),
+              })
+            ),
+          },
+        },
+      },
+    },
+  }),
+  (c) => {
+    const data = { message: "ok", version: BUILD_VERSION, environment: env.NODE_ENV }
+    return c.json({ data })
+  }
+)
+```
+
+The OpenAPI spec is served at `/api/openapi.json` and documented at `/api/docs`.
+
+## Error Handling
+
+### Client-Side Error Handling
+
+```typescript
+try {
+  const response = await apiClient.v1.user.$get()
+  
+  if (!response.ok) {
+    const error = await response.json()
+    // error.error.code is "UNAUTHORIZED" | "NOT_FOUND" | etc.
+    // error.error.message is string
+    throw new Error(error.error.message)
+  }
+  
+  const data = await response.json()
+} catch (error) {
+  console.error("Request failed:", error)
+}
+```
+
+### Server Error Handler
+
+```typescript title="api/hono/src/lib/error.ts"
+import type { ErrorHandler } from "hono"
+
+export const errorHandler: ErrorHandler = (err, c) => {
+  console.error(err)
+  
+  return c.json(
+    {
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "An unexpected error occurred",
+      },
+    },
+    500
+  )
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use React Query for data fetching">
+    React Query provides caching, refetching, and state management:
+    
+    ```typescript
+    const { data, isLoading, error } = useQuery({
+      queryKey: ["user", userId],
+      queryFn: async () => {
+        const res = await apiClient.v1.user.$get()
+        return res.json()
+      },
+    })
+    ```
+  </Accordion>
+  
+  <Accordion title="Check response.ok before parsing">
+    Always verify the response succeeded:
+    
+    ```typescript
+    const response = await apiClient.health.$get()
+    if (!response.ok) {
+      throw new Error("Request failed")
+    }
+    const data = await response.json()
+    ```
+  </Accordion>
+  
+  <Accordion title="Use server-side auth for SSR">
+    For server components, pass headers to maintain session:
+    
+    ```typescript
+    const response = await apiClient.auth["get-session"].$get(
+      undefined,
+      { headers: Object.fromEntries((await headers()).entries()) }
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Comparison to Other Approaches
+
+| Feature | Hono RPC | tRPC | REST + Codegen |
+|---------|----------|------|----------------|
+| Type Safety | ✅ Full | ✅ Full | ⚠️ Codegen required |
+| Build Step | ✅ None | ✅ None | ❌ Required |
+| Standard HTTP | ✅ Yes | ❌ No | ✅ Yes |
+| OpenAPI Support | ✅ Yes | ❌ No | ✅ Yes |
+| Bundle Size | ✅ Small | ⚠️ Medium | ✅ Small |
+
+Hono RPC provides the best of all worlds: full type safety, no build steps, and standard HTTP/REST APIs.

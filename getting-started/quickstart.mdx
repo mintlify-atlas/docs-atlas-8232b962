@@ -1,0 +1,274 @@
+---
+title: Quick Start
+description: Get up and running with ZeroStarter in minutes
+---
+
+This guide will walk you through setting up ZeroStarter and running your first application.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- **Bun** v1.3.7 or later installed
+- **PostgreSQL** database running
+- **Git** installed
+
+<Note>
+If you haven't installed these yet, check out the [Installation Guide](/getting-started/installation) for detailed setup instructions.
+</Note>
+
+## Quick Start in 5 Minutes
+
+<Steps>
+
+### Clone and Install
+
+Clone the repository and install dependencies:
+
+```bash
+bunx gitpick https://github.com/nrjdalal/zerostarter/tree/main
+cd zerostarter
+bun install
+```
+
+### Configure Environment
+
+Copy the example environment file and add your configuration:
+
+```bash
+cp .env.example .env
+```
+
+At minimum, configure these required variables in your `.env` file:
+
+```bash
+# Generate using: openssl rand -base64 32
+BETTER_AUTH_SECRET=your_generated_secret_here
+
+# Generate using: bunx pglaunch -k
+POSTGRES_URL=postgresql://user:password@localhost:5432/database
+```
+
+<Tip>
+Use `openssl rand -base64 32` to generate a secure random secret for `BETTER_AUTH_SECRET`.
+</Tip>
+
+### Set Up Database
+
+Generate the database schema and run migrations:
+
+```bash
+bun run db:generate
+bun run db:migrate
+```
+
+### Start Development Server
+
+Launch both frontend and backend in development mode:
+
+```bash
+bun dev
+```
+
+This command uses Turborepo to run:
+- **Next.js frontend** on `http://localhost:3000`
+- **Hono backend API** on `http://localhost:4000`
+
+### Explore Your Application
+
+Open your browser and navigate to:
+
+- **Frontend**: [http://localhost:3000](http://localhost:3000)
+- **API Documentation**: [http://localhost:4000/api/docs](http://localhost:4000/api/docs)
+- **Health Check**: [http://localhost:4000/health](http://localhost:4000/health)
+
+</Steps>
+
+## What's Running?
+
+When you run `bun dev`, Turborepo orchestrates the following processes:
+
+<AccordionGroup>
+
+<Accordion title="Next.js Frontend (Port 3000)">
+
+The frontend application built with:
+- **Next.js 16** for the React framework
+- **Tailwind CSS** for styling
+- **Shadcn UI** for components
+- **TanStack Query** for data fetching
+- **Better Auth** client for authentication
+
+The frontend automatically connects to the backend API using the type-safe Hono RPC client.
+
+</Accordion>
+
+<Accordion title="Hono Backend API (Port 4000)">
+
+The backend API server featuring:
+- **Hono** web framework
+- **Drizzle ORM** for database queries
+- **Better Auth** for authentication
+- **Scalar** API documentation at `/api/docs`
+- **Rate limiting** with configurable limits
+- **OpenAPI** auto-generated specification
+
+All API routes are type-safe and automatically inferred on the frontend.
+
+</Accordion>
+
+</AccordionGroup>
+
+## Understanding the Development Workflow
+
+### Making Your First Change
+
+Let's make a simple change to see hot reloading in action:
+
+<Steps>
+
+<Step title="Modify the Frontend">
+
+Open `web/next/src/app/page.tsx` and make a change to the homepage.
+
+The page will automatically reload in your browser.
+
+</Step>
+
+<Step title="Add a New API Route">
+
+Create a new route in `api/hono/src/routers/`:
+
+```typescript
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+app.get('/hello', (c) => {
+  return c.json({ message: 'Hello from ZeroStarter!' })
+})
+
+export default app
+```
+
+The API will automatically restart with your changes.
+
+</Step>
+
+<Step title="Call the API from Frontend">
+
+Use the type-safe client in your Next.js component:
+
+```typescript
+import { apiClient } from '@/lib/api/client'
+
+const response = await apiClient.hello.$get()
+const data = await response.json()
+console.log(data.message) // Fully typed!
+```
+
+</Step>
+
+</Steps>
+
+### Available Scripts
+
+Here are the most commonly used commands:
+
+<CodeGroup>
+
+```bash Development
+# Start development servers with Turbo TUI
+bun dev
+
+# Run type checking across all packages
+bun run check-types
+
+# Format code with Oxfmt
+bun run format
+
+# Lint code with Oxlint
+bun run lint
+```
+
+```bash Database
+# Generate new migrations from schema changes
+bun run db:generate
+
+# Apply migrations to database
+bun run db:migrate
+
+# Open Drizzle Studio (database GUI)
+bun run db:studio
+```
+
+```bash Production
+# Build all packages for production
+bun run build
+
+# Start production servers
+bun run start
+```
+
+```bash Maintenance
+# Clean all build artifacts and dependencies
+bun run clean
+
+# Update Shadcn UI components
+bun run shadcn:update
+```
+
+</CodeGroup>
+
+## Project Structure Overview
+
+ZeroStarter uses a monorepo structure organized with Turborepo:
+
+```
+zerostarter/
+├── api/
+│   └── hono/              # Backend API (Hono)
+├── web/
+│   └── next/              # Frontend app (Next.js)
+└── packages/
+    ├── auth/              # Shared authentication (Better Auth)
+    ├── db/                # Database schema (Drizzle ORM)
+    ├── env/               # Environment variables
+    └── tsconfig/          # TypeScript config
+```
+
+<Card title="Learn More" icon="folder-tree" href="/getting-started/project-structure">
+  Explore the detailed project structure and organization
+</Card>
+
+## Next Steps
+
+Now that you have ZeroStarter running, explore these guides:
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/getting-started/architecture">
+    Understand the tech stack and architectural decisions
+  </Card>
+  <Card title="Type-Safe API" icon="shield-check" href="/core-concepts/type-safe-api">
+    Learn how to use the end-to-end type-safe API client
+  </Card>
+  <Card title="Authentication" icon="lock" href="/features/authentication">
+    Set up OAuth providers and user authentication
+  </Card>
+  <Card title="Database" icon="database" href="/features/database">
+    Work with the database using Drizzle ORM
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you run into any issues:
+
+- Check the [Installation Guide](/getting-started/installation#common-issues) for common problems
+- Review the [full documentation](https://zerostarter.dev/docs)
+- Open an issue on [GitHub](https://github.com/nrjdalal/zerostarter/issues)
+- Follow [@nrjdalal](https://twitter.com/nrjdalal) for updates
+
+<Tip>
+Star the [repository](https://github.com/nrjdalal/zerostarter) if you find ZeroStarter helpful!
+</Tip>

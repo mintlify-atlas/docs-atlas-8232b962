@@ -1,0 +1,544 @@
+---
+title: Production Checklist
+description: Essential checklist for deploying ZeroStarter to production
+---
+
+Complete this checklist before deploying ZeroStarter to production to ensure security, performance, and reliability.
+
+## Environment Configuration
+
+### Required Environment Variables
+
+<Steps>
+  <Step title="Set NODE_ENV to production">
+    ```bash
+    NODE_ENV=production
+    ```
+
+    This enables production optimizations in Next.js and other libraries.
+  </Step>
+
+  <Step title="Generate authentication secret">
+    ```bash
+    openssl rand -base64 32
+    ```
+
+    Set the output as:
+    ```bash
+    BETTER_AUTH_SECRET=your-generated-secret
+    ```
+
+    <Warning>
+    Never reuse development secrets in production. Generate a new one.
+    </Warning>
+  </Step>
+
+  <Step title="Configure database connection">
+    ```bash
+    POSTGRES_URL=postgresql://user:password@host:5432/database?sslmode=require
+    ```
+
+    Ensure:
+    - SSL is enabled (`sslmode=require`)
+    - Connection pooling is configured
+    - Credentials are stored securely
+  </Step>
+
+  <Step title="Set application URLs">
+    ```bash
+    # API configuration
+    HONO_APP_URL=https://api.yourdomain.com
+    HONO_TRUSTED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+
+    # Client configuration
+    NEXT_PUBLIC_APP_URL=https://yourdomain.com
+    NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+    ```
+
+    <Info>
+    Separate multiple trusted origins with commas, no spaces.
+    </Info>
+  </Step>
+</Steps>
+
+### Optional Environment Variables
+
+<AccordionGroup>
+  <Accordion title="OAuth Providers">
+    If using GitHub OAuth:
+    ```bash
+    GITHUB_CLIENT_ID=your-github-client-id
+    GITHUB_CLIENT_SECRET=your-github-secret
+    ```
+
+    If using Google OAuth:
+    ```bash
+    GOOGLE_CLIENT_ID=your-google-client-id
+    GOOGLE_CLIENT_SECRET=your-google-secret
+    ```
+
+    Configure OAuth redirect URLs:
+    - GitHub: `https://yourdomain.com/api/auth/callback/github`
+    - Google: `https://yourdomain.com/api/auth/callback/google`
+  </Accordion>
+
+  <Accordion title="Rate Limiting">
+    ```bash
+    HONO_RATE_LIMIT=60
+    HONO_RATE_LIMIT_WINDOW_MS=60000
+    ```
+
+    Default: 60 requests per minute, 120 for authenticated users.
+  </Accordion>
+
+  <Accordion title="Analytics">
+    ```bash
+    NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+    NEXT_PUBLIC_POSTHOG_KEY=your-posthog-key
+    ```
+
+    See [Analytics documentation](/features/analytics) for setup.
+  </Accordion>
+
+  <Accordion title="User Feedback">
+    ```bash
+    NEXT_PUBLIC_USERJOT_URL=your-userjot-url
+    ```
+
+    Optional: UserJot integration for user feedback (configuration not yet documented).
+  </Accordion>
+</AccordionGroup>
+
+## Database Setup
+
+<Steps>
+  <Step title="Choose a PostgreSQL provider">
+    Recommended providers:
+
+    - **Vercel Postgres** - Integrated with Vercel deployments
+    - **Neon** - Serverless Postgres with autoscaling
+    - **Supabase** - Postgres with additional features
+    - **Railway** - Simple deployment platform
+    - **AWS RDS** - Enterprise-grade managed Postgres
+  </Step>
+
+  <Step title="Enable connection pooling">
+    For serverless deployments, use connection pooling:
+
+    ```bash
+    # Neon example
+    POSTGRES_URL=postgresql://user:pass@host/db?sslmode=require&pool_timeout=10&max_connections=20
+    ```
+  </Step>
+
+  <Step title="Run migrations">
+    ```bash
+    bun run db:migrate
+    ```
+
+    Verify schema:
+    ```bash
+    bun run db:studio
+    ```
+  </Step>
+
+  <Step title="Set up automated backups">
+    Configure daily backups with your database provider:
+
+    - Retention period: 7-30 days
+    - Backup schedule: Daily at low-traffic hours
+    - Point-in-time recovery: Enable if available
+  </Step>
+</Steps>
+
+## Security
+
+### Authentication
+
+<Checklist>
+  - [ ] `BETTER_AUTH_SECRET` is unique and at least 32 characters
+  - [ ] OAuth redirect URIs are configured correctly
+  - [ ] OAuth apps are set to production mode
+  - [ ] Session cookies are set to `secure` and `httpOnly`
+  - [ ] CSRF protection is enabled (default in Better Auth)
+</Checklist>
+
+### API Security
+
+<Checklist>
+  - [ ] CORS is configured with `HONO_TRUSTED_ORIGINS`
+  - [ ] Rate limiting is enabled and configured
+  - [ ] API routes require authentication where appropriate
+  - [ ] Input validation is implemented using Zod schemas
+  - [ ] SQL injection protection via Drizzle ORM parameterized queries
+</Checklist>
+
+### Infrastructure
+
+<Checklist>
+  - [ ] HTTPS/TLS is enabled and enforced
+  - [ ] SSL certificates are valid and auto-renewing
+  - [ ] Database connections use SSL (`sslmode=require`)
+  - [ ] Secrets are stored in environment variables, not code
+  - [ ] `.env` files are not committed to git
+</Checklist>
+
+## Performance
+
+### Build Optimization
+
+<Steps>
+  <Step title="Verify Turbo cache is working">
+    ```bash
+    turbo build --summarize
+    ```
+
+    Check the summary for cache hits.
+  </Step>
+
+  <Step title="Enable Next.js optimization features">
+    Ensure these are enabled in `next.config.ts`:
+
+    ```ts
+    export default {
+      compress: true,
+      reactStrictMode: true,
+      images: {
+        formats: ['image/avif', 'image/webp'],
+      },
+    }
+    ```
+  </Step>
+
+  <Step title="Configure build caching">
+    For Vercel:
+    - Turborepo Remote Cache is automatic
+
+    For Docker:
+    ```bash
+    DOCKER_BUILDKIT=1 docker-compose build
+    ```
+  </Step>
+</Steps>
+
+### Runtime Performance
+
+<Checklist>
+  - [ ] Database queries are optimized with proper indexes
+  - [ ] API responses are cached where appropriate
+  - [ ] Static assets are served from CDN
+  - [ ] Images are optimized using Next.js Image component
+  - [ ] Code splitting is implemented for large pages
+  - [ ] Bundle size is monitored (use `next build` output)
+</Checklist>
+
+## Monitoring
+
+### Application Monitoring
+
+<Steps>
+  <Step title="Set up error tracking">
+    Integrate error tracking:
+
+    - **Sentry** - Error tracking and performance monitoring
+    - **LogRocket** - Session replay and error tracking
+    - **Better Stack** - Log aggregation and monitoring
+  </Step>
+
+  <Step title="Configure analytics">
+    Set up PostHog or alternative:
+
+    ```bash
+    NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+    NEXT_PUBLIC_POSTHOG_KEY=your-key
+    ```
+
+    See [Analytics guide](/features/analytics).
+  </Step>
+
+  <Step title="Set up uptime monitoring">
+    Use services like:
+
+    - **Uptime Robot** - Free uptime monitoring
+    - **Better Uptime** - Advanced monitoring and status pages
+    - **Pingdom** - Enterprise monitoring
+  </Step>
+</Steps>
+
+### Infrastructure Monitoring
+
+<Checklist>
+  - [ ] Database performance metrics are tracked
+  - [ ] Server resource usage is monitored (CPU, memory)
+  - [ ] API response times are tracked
+  - [ ] Error rates and status codes are logged
+  - [ ] Deployment notifications are configured
+</Checklist>
+
+## Testing
+
+### Pre-Deployment Tests
+
+<Checklist>
+  - [ ] Type checking passes: `bun run check-types`
+  - [ ] Linting passes: `bun run lint`
+  - [ ] Formatting is correct: `bun run format:check`
+  - [ ] Build succeeds: `bun run build`
+  - [ ] All environment variables are set
+  - [ ] Database migrations run successfully
+</Checklist>
+
+### Post-Deployment Tests
+
+<Steps>
+  <Step title="Verify application loads">
+    - Visit your production URL
+    - Check browser console for errors
+    - Verify static assets load correctly
+  </Step>
+
+  <Step title="Test authentication">
+    - Sign up with email
+    - Sign in with OAuth providers
+    - Test sign out
+    - Verify session persistence
+  </Step>
+
+  <Step title="Test API endpoints">
+    ```bash
+    curl https://api.yourdomain.com/health
+    ```
+
+    Verify protected endpoints require authentication.
+  </Step>
+
+  <Step title="Test rate limiting">
+    Make multiple requests to verify rate limiting:
+
+    ```bash
+    for i in {1..70}; do curl https://api.yourdomain.com/endpoint; done
+    ```
+
+    Should return 429 after 60 requests.
+  </Step>
+</Steps>
+
+## Documentation
+
+<Checklist>
+  - [ ] API documentation is up to date
+  - [ ] Environment variables are documented
+  - [ ] Deployment process is documented
+  - [ ] Troubleshooting guide is available
+  - [ ] Runbook for common issues is created
+</Checklist>
+
+## Backup and Recovery
+
+### Database Backups
+
+<Steps>
+  <Step title="Configure automated backups">
+    Set up with your database provider:
+
+    - Daily automated backups
+    - 7-30 day retention
+    - Point-in-time recovery if available
+  </Step>
+
+  <Step title="Test backup restoration">
+    ```bash
+    # Create test backup
+    pg_dump $POSTGRES_URL > backup.sql
+
+    # Test restore to staging
+    psql $STAGING_POSTGRES_URL < backup.sql
+    ```
+  </Step>
+
+  <Step title="Document recovery procedure">
+    Create runbook with:
+
+    - Backup location and access
+    - Restoration commands
+    - Expected recovery time
+    - Contact information for database provider
+  </Step>
+</Steps>
+
+### Disaster Recovery
+
+<Checklist>
+  - [ ] Backup strategy is defined and tested
+  - [ ] Recovery time objective (RTO) is established
+  - [ ] Recovery point objective (RPO) is established
+  - [ ] Incident response plan is documented
+  - [ ] Key team members have access to production
+</Checklist>
+
+## Compliance
+
+### GDPR Compliance
+
+<Checklist>
+  - [ ] Privacy policy is published and accessible
+  - [ ] Cookie consent is implemented if required
+  - [ ] User data export functionality is available
+  - [ ] User data deletion functionality is available
+  - [ ] Data processing agreements are in place
+</Checklist>
+
+### Accessibility
+
+<Checklist>
+  - [ ] ARIA labels are implemented
+  - [ ] Keyboard navigation works
+  - [ ] Color contrast meets WCAG AA standards
+  - [ ] Form validation includes helpful error messages
+  - [ ] Images have alt text
+</Checklist>
+
+## Cost Optimization
+
+### Vercel Deployment
+
+<Checklist>
+  - [ ] Monitor function execution times
+  - [ ] Review bandwidth usage
+  - [ ] Optimize image sizes and formats
+  - [ ] Use ISR (Incremental Static Regeneration) where appropriate
+  - [ ] Monitor build minutes usage
+</Checklist>
+
+### Docker Deployment
+
+<Checklist>
+  - [ ] Container resource limits are set
+  - [ ] Auto-scaling is configured if needed
+  - [ ] Unused containers are removed
+  - [ ] Images are optimized (multi-stage builds)
+  - [ ] Log rotation is configured
+</Checklist>
+
+### Database
+
+<Checklist>
+  - [ ] Connection pooling is enabled
+  - [ ] Unused indexes are removed
+  - [ ] Query performance is monitored
+  - [ ] Data retention policies are implemented
+  - [ ] Storage growth is monitored
+</Checklist>
+
+## Launch Preparation
+
+### Pre-Launch
+
+<Steps>
+  <Step title="Set up staging environment">
+    Deploy to staging with production-like configuration:
+
+    ```bash
+    # Staging environment
+    NODE_ENV=production
+    NEXT_PUBLIC_APP_URL=https://staging.yourdomain.com
+    NEXT_PUBLIC_API_URL=https://api-staging.yourdomain.com
+    ```
+  </Step>
+
+  <Step title="Perform load testing">
+    Use tools like:
+
+    - **k6** - Open-source load testing
+    - **Artillery** - Modern load testing toolkit
+    - **Locust** - Python-based load testing
+
+    Example k6 test:
+    ```js
+    import http from 'k6/http';
+    export default function() {
+      http.get('https://api.yourdomain.com/health');
+    }
+    ```
+  </Step>
+
+  <Step title="Review all checklist items">
+    Go through each section and ensure all items are completed.
+  </Step>
+</Steps>
+
+### Launch Day
+
+<Steps>
+  <Step title="Deploy to production">
+    - Deploy API service first
+    - Verify API is healthy
+    - Deploy web service
+    - Monitor error rates
+  </Step>
+
+  <Step title="Smoke test">
+    Test critical user flows:
+    - Homepage loads
+    - Authentication works
+    - API calls succeed
+    - Database queries work
+  </Step>
+
+  <Step title="Monitor closely">
+    Watch for:
+    - Error spikes
+    - Performance degradation
+    - Failed requests
+    - Database connection issues
+  </Step>
+</Steps>
+
+### Post-Launch
+
+<Checklist>
+  - [ ] Monitor error tracking dashboard
+  - [ ] Review performance metrics
+  - [ ] Check uptime status
+  - [ ] Verify automated backups ran successfully
+  - [ ] Document any issues encountered
+  - [ ] Schedule post-mortem if needed
+</Checklist>
+
+## Ongoing Maintenance
+
+### Weekly Tasks
+
+<Checklist>
+  - [ ] Review error logs
+  - [ ] Check application performance
+  - [ ] Monitor database size and growth
+  - [ ] Review security advisories
+</Checklist>
+
+### Monthly Tasks
+
+<Checklist>
+  - [ ] Update dependencies
+  - [ ] Review and rotate secrets if needed
+  - [ ] Test backup restoration
+  - [ ] Review and optimize database queries
+  - [ ] Update documentation
+</Checklist>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Vercel Deployment" icon="triangle" href="/deployment/vercel">
+    Vercel-specific deployment guide
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Docker containerization guide
+  </Card>
+  <Card title="Analytics Setup" icon="chart-line" href="/features/analytics">
+    Configure PostHog analytics
+  </Card>
+  <Card title="Database Management" icon="database" href="/database/schema">
+    Database schema and migrations
+  </Card>
+</CardGroup>

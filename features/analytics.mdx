@@ -1,0 +1,275 @@
+---
+title: Analytics
+description: PostHog integration for product analytics and user behavior tracking
+---
+
+## Overview
+
+ZeroStarter includes built-in integration with [PostHog](https://posthog.com) for comprehensive product analytics, feature flags, session recordings, and user behavior tracking. PostHog is optional and only initializes when configured.
+
+## Features
+
+- **Product Analytics**: Track user behavior and product usage
+- **Session Recordings**: Replay user sessions for debugging and insights
+- **Feature Flags**: Roll out features gradually with confidence
+- **A/B Testing**: Run experiments to optimize your product
+- **Funnels & Paths**: Understand user journeys and conversion flows
+- **Privacy-First**: GDPR-compliant with data residency options
+
+## Setup
+
+<Steps>
+  <Step title="Create a PostHog Account">
+    1. Sign up at [PostHog](https://posthog.com) (cloud) or self-host
+    2. Create a new project
+    3. Copy your **Project API Key** from Project Settings (starts with `phc_`)
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Add your PostHog credentials to your `.env` file:
+
+    ```bash
+    # Optional: PostHog Analytics
+    NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+    NEXT_PUBLIC_POSTHOG_KEY=phc_your_project_api_key
+    ```
+
+    <Note>
+      Use `https://us.i.posthog.com` for US Cloud, `https://eu.i.posthog.com` for EU Cloud, or your self-hosted URL.
+    </Note>
+  </Step>
+
+  <Step title="Environment Schema">
+    PostHog variables are configured in `packages/env/src/web-next.ts`:
+
+    ```ts
+    client: {
+      NEXT_PUBLIC_POSTHOG_HOST: z.url().optional(),
+      NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
+    }
+    ```
+  </Step>
+</Steps>
+
+## Implementation
+
+### Client Initialization
+
+PostHog is initialized in `web/next/instrumentation-client.ts` using Next.js instrumentation:
+
+```ts web/next/instrumentation-client.ts
+import { env } from "@packages/env/web-next"
+import posthog from "posthog-js"
+
+if (typeof window !== "undefined" && env.NEXT_PUBLIC_POSTHOG_KEY) {
+  posthog.init(env.NEXT_PUBLIC_POSTHOG_KEY, {
+    api_host: env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com",
+    defaults: "2025-11-30",
+  })
+}
+```
+
+<Note>
+  The `defaults: "2025-11-30"` parameter enables PostHog's latest default configuration as of that date.
+</Note>
+
+### Provider Setup
+
+The PostHog provider wraps the application in `web/next/src/app/providers.tsx`:
+
+```ts web/next/src/app/providers.tsx
+import { PostHogProvider } from "@posthog/react"
+import posthog from "posthog-js"
+
+export function OuterProvider({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient())
+
+  return (
+    <PostHogProvider client={posthog}>
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    </PostHogProvider>
+  )
+}
+```
+
+## Usage
+
+### Track Custom Events
+
+Track user actions and custom events:
+
+```ts
+import posthog from "posthog-js"
+
+// Track a custom event
+posthog.capture("button_clicked", {
+  button_name: "signup",
+  page: "landing",
+})
+
+// Track page views (automatic with Next.js)
+posthog.capture("$pageview")
+```
+
+### Identify Users
+
+Identify users after authentication to track across sessions:
+
+```ts
+import posthog from "posthog-js"
+
+// Identify a user after sign-in
+posthog.identify(user.id, {
+  email: user.email,
+  name: user.name,
+  plan: "pro",
+})
+
+// Reset identity on sign-out
+posthog.reset()
+```
+
+### Feature Flags
+
+Use feature flags to control feature rollout:
+
+```ts
+import posthog from "posthog-js"
+
+// Check if a feature flag is enabled
+if (posthog.isFeatureEnabled("new-dashboard")) {
+  // Show new dashboard
+} else {
+  // Show old dashboard
+}
+
+// Get feature flag variant
+const variant = posthog.getFeatureFlag("pricing-test")
+if (variant === "variant-a") {
+  // Show pricing variant A
+}
+```
+
+### React Hooks
+
+Use PostHog's React hooks for component-level tracking:
+
+```tsx
+import { usePostHog, useFeatureFlagEnabled } from "@posthog/react"
+
+function Component() {
+  const posthog = usePostHog()
+  const showNewFeature = useFeatureFlagEnabled("new-feature")
+
+  const handleClick = () => {
+    posthog?.capture("feature_used", {
+      feature: "new-feature",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  if (showNewFeature) {
+    return <NewFeature onClick={handleClick} />
+  }
+
+  return <OldFeature />
+}
+```
+
+### User Properties
+
+Set user properties for segmentation:
+
+```ts
+import posthog from "posthog-js"
+
+// Set user properties
+posthog.setPersonProperties({
+  plan: "enterprise",
+  company: "Acme Corp",
+  trial_ends: "2026-04-01",
+})
+
+// Set properties once (won't override existing values)
+posthog.setPersonPropertiesForFlags({
+  initial_utm_source: "google",
+})
+```
+
+## Session Recordings
+
+PostHog automatically records user sessions when enabled. Configure in your PostHog project settings:
+
+- **Recording Sampling**: Control what percentage of sessions to record
+- **Privacy Settings**: Mask sensitive input fields automatically
+- **Console Logs**: Capture console output for debugging
+- **Network Requests**: Track API calls and responses
+
+## Disabling Analytics
+
+To disable PostHog analytics:
+
+1. Remove or leave empty the `NEXT_PUBLIC_POSTHOG_KEY` environment variable
+2. PostHog will not initialize if the key is not provided
+3. No tracking code will execute
+
+## Privacy Considerations
+
+- **Data Residency**: Choose EU or US hosting for GDPR compliance
+- **Session Recording Masking**: Automatically masks password fields and sensitive inputs
+- **User Opt-Out**: Respect user privacy preferences
+- **Data Retention**: Configure automatic data deletion policies
+- **IP Anonymization**: Option to anonymize IP addresses
+
+## Best Practices
+
+<Steps>
+  <Step title="Event Naming">
+    Use consistent, descriptive event names:
+    ```ts
+    // Good
+    posthog.capture("subscription_created")
+    posthog.capture("payment_failed")
+    
+    // Avoid
+    posthog.capture("click")
+    posthog.capture("event1")
+    ```
+  </Step>
+
+  <Step title="Event Properties">
+    Include relevant context with events:
+    ```ts
+    posthog.capture("purchase_completed", {
+      product_id: "prod_123",
+      amount: 99.99,
+      currency: "USD",
+      payment_method: "card",
+    })
+    ```
+  </Step>
+
+  <Step title="User Identification">
+    Identify users after authentication:
+    ```ts
+    // After successful sign-in
+    posthog.identify(user.id, {
+      email: user.email,
+      name: user.name,
+    })
+    
+    // On sign-out
+    posthog.reset()
+    ```
+  </Step>
+</Steps>
+
+## Resources
+
+- [PostHog Documentation](https://posthog.com/docs)
+- [PostHog React SDK](https://posthog.com/docs/libraries/react)
+- [Feature Flags Guide](https://posthog.com/docs/feature-flags)
+- [Session Recordings](https://posthog.com/docs/session-replay)
+- [Event Tracking Best Practices](https://posthog.com/docs/data/events)

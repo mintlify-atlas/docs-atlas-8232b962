@@ -1,0 +1,579 @@
+---
+title: Styling
+description: Tailwind CSS v4 configuration, design tokens, and styling patterns
+---
+
+ZeroStarter uses Tailwind CSS v4 with a custom design system built on CSS variables. The styling architecture emphasizes consistency, flexibility, and maintainability.
+
+## Tailwind CSS v4
+
+Tailwind CSS v4 is configured using CSS imports:
+
+```css title="src/app/globals.css"
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/caveat";
+@import "@fontsource-variable/dm-sans";
+@import "@fontsource-variable/newsreader";
+@import "@fontsource-variable/jetbrains-mono";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+```
+
+**Key Features:**
+- No separate `tailwind.config.js` needed
+- CSS-first configuration
+- Custom variant support
+- Integration with Shadcn UI and Fumadocs
+
+## Design Tokens
+
+Design tokens are defined using CSS variables:
+
+```css title="src/app/globals.css"
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "DM Sans Variable", sans-serif;
+  --font-cursive: "Caveat Variable", cursive;
+  --font-serif: "Newsreader Variable", serif;
+  --font-mono: "JetBrains Mono Variable", monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+```
+
+## Color System
+
+Colors use OKLCH color space for better perceptual uniformity:
+
+### Light Mode
+
+```css
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.58 0.22 27);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+```
+
+### Dark Mode
+
+```css
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --primary: oklch(0.87 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.371 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+```
+
+### Color Usage
+
+<Tabs>
+  <Tab title="Background Colors">
+    ```tsx
+    <div className="bg-background">Main background</div>
+    <div className="bg-muted">Muted background</div>
+    <div className="bg-card">Card background</div>
+    <div className="bg-primary">Primary background</div>
+    <div className="bg-secondary">Secondary background</div>
+    <div className="bg-accent">Accent background</div>
+    <div className="bg-destructive">Destructive background</div>
+    ```
+  </Tab>
+
+  <Tab title="Text Colors">
+    ```tsx
+    <p className="text-foreground">Main text</p>
+    <p className="text-muted-foreground">Muted text</p>
+    <p className="text-primary">Primary text</p>
+    <p className="text-primary-foreground">Text on primary bg</p>
+    <p className="text-destructive">Destructive text</p>
+    ```
+  </Tab>
+
+  <Tab title="Border Colors">
+    ```tsx
+    <div className="border border-border">Default border</div>
+    <div className="border border-input">Input border</div>
+    <div className="border border-primary">Primary border</div>
+    ```
+  </Tab>
+
+  <Tab title="Ring Colors">
+    ```tsx
+    <button className="focus-visible:ring-3 focus-visible:ring-ring/50">
+      Focus ring
+    </button>
+    ```
+  </Tab>
+</Tabs>
+
+## Typography
+
+### Font Families
+
+Self-hosted variable fonts for optimal performance:
+
+```css
+@theme inline {
+  --font-sans: "DM Sans Variable", sans-serif;
+  --font-cursive: "Caveat Variable", cursive;
+  --font-serif: "Newsreader Variable", serif;
+  --font-mono: "JetBrains Mono Variable", monospace;
+}
+```
+
+**Usage:**
+
+```tsx
+<p className="font-sans">Sans serif text (default)</p>
+<p className="font-cursive">Cursive text</p>
+<p className="font-serif">Serif text</p>
+<code className="font-mono">Monospace text</code>
+```
+
+### Font Sizes
+
+Tailwind's default scale with semantic naming:
+
+```tsx
+<h1 className="text-4xl font-bold">Heading 1</h1>
+<h2 className="text-3xl font-bold">Heading 2</h2>
+<h3 className="text-2xl font-bold">Heading 3</h3>
+<h4 className="text-xl font-semibold">Heading 4</h4>
+<p className="text-base">Body text</p>
+<p className="text-sm">Small text</p>
+<p className="text-xs">Extra small text</p>
+```
+
+### Font Weights
+
+```tsx
+<p className="font-normal">Regular (400)</p>
+<p className="font-medium">Medium (500)</p>
+<p className="font-semibold">Semibold (600)</p>
+<p className="font-bold">Bold (700)</p>
+```
+
+## Spacing & Layout
+
+### Container
+
+```tsx
+<div className="container mx-auto px-5">
+  {/* Centered container with responsive padding */}
+</div>
+
+<div className="container mx-auto max-w-6xl px-5">
+  {/* Centered container with max width */}
+</div>
+```
+
+### Spacing Scale
+
+```tsx
+{/* Padding */}
+<div className="p-4">1rem padding</div>
+<div className="px-5 py-12">Custom padding</div>
+
+{/* Margin */}
+<div className="m-4">1rem margin</div>
+<div className="mb-8">2rem bottom margin</div>
+
+{/* Gap */}
+<div className="flex gap-4">1rem gap</div>
+<div className="grid gap-6">1.5rem gap</div>
+```
+
+## Border Radius
+
+Custom radius scale based on design tokens:
+
+```tsx
+<div className="rounded-sm">Small radius (--radius-sm)</div>
+<div className="rounded-md">Medium radius (--radius-md)</div>
+<div className="rounded-lg">Large radius (--radius-lg)</div>
+<div className="rounded-xl">XL radius (--radius-xl)</div>
+<div className="rounded-2xl">2XL radius (--radius-2xl)</div>
+```
+
+**Default radius:** `0.625rem` (10px)
+
+## Dark Mode
+
+Dark mode is handled via the `dark` class:
+
+```tsx title="src/app/providers.tsx"
+import { ThemeProvider as NextThemesProvider } from "next-themes"
+
+export function InnerProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <NextThemesProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      {children}
+    </NextThemesProvider>
+  )
+}
+```
+
+### Dark Mode Variants
+
+<CodeGroup>
+```tsx title="Background"
+{/* Light: white, Dark: black */}
+<div className="bg-background" />
+
+{/* Light: gray-100, Dark: gray-900 */}
+<div className="bg-muted" />
+```
+
+```tsx title="Text"
+{/* Light: black, Dark: white */}
+<p className="text-foreground" />
+
+{/* Light: gray-600, Dark: gray-400 */}
+<p className="text-muted-foreground" />
+```
+
+```tsx title="Custom"
+{/* Only apply in dark mode */}
+<div className="dark:bg-gray-800 dark:text-white" />
+
+{/* Different values per mode */}
+<div className="bg-white text-black dark:bg-black dark:text-white" />
+```
+</CodeGroup>
+
+### Theme Toggle Component
+
+```tsx
+import { RiMoonLine, RiSunLine } from "@remixicon/react"
+import { useTheme } from "next-themes"
+import { Button } from "@/components/ui/button"
+
+export function ModeToggle() {
+  const { theme, setTheme } = useTheme()
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+    >
+      <RiSunLine className="size-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <RiMoonLine className="absolute size-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      <span className="sr-only">Toggle theme</span>
+    </Button>
+  )
+}
+```
+
+## Responsive Design
+
+Mobile-first responsive breakpoints:
+
+```tsx
+<div className="
+  w-full
+  sm:w-1/2
+  md:w-1/3
+  lg:w-1/4
+  xl:w-1/6
+">
+  {/* Mobile: 100%, Tablet: 50%, Desktop: 33%, Large: 25%, XL: 16.6% */}
+</div>
+```
+
+**Breakpoints:**
+- `sm`: 640px
+- `md`: 768px
+- `lg`: 1024px
+- `xl`: 1280px
+- `2xl`: 1536px
+
+### Grid Layout Example
+
+```tsx
+<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+  {/* Mobile: 1 column, Tablet: 2 columns, Desktop: 3 columns */}
+  <Card>...</Card>
+  <Card>...</Card>
+  <Card>...</Card>
+</div>
+```
+
+## Custom Utilities
+
+### Base Layer
+
+```css title="src/app/globals.css"
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+```
+
+### Animation Utilities
+
+From `tw-animate-css`:
+
+```tsx
+<div className="animate-in fade-in duration-2000">
+  Fade in animation
+</div>
+
+<div className="animate-spin">
+  Spinning loader
+</div>
+
+<div className="transition-all hover:scale-105">
+  Hover scale effect
+</div>
+```
+
+## Styling Patterns
+
+### Card Hover Effect
+
+```tsx
+<Card className="hover:border-primary/50 border-2 transition-colors">
+  <CardHeader>
+    <CardTitle>Hover me</CardTitle>
+  </CardHeader>
+</Card>
+```
+
+### Gradient Text
+
+```tsx
+<h1 className="from-primary to-primary/60 bg-linear-to-r bg-clip-text text-transparent">
+  Gradient Text
+</h1>
+```
+
+### Glassmorphism
+
+```tsx
+<div className="bg-background/80 backdrop-blur-lg border rounded-xl">
+  Glass effect
+</div>
+```
+
+### Grid Background
+
+From the homepage:
+
+```tsx
+<div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] mask-[radial-gradient(ellipse_80%_50%_at_50%_0%,white_70%,transparent_110%)] bg-size-[20px_20px]" />
+```
+
+### Status Badge
+
+```tsx
+<div className="flex h-8 items-center gap-2 rounded-full border border-green-500/20 bg-green-500/10 px-4 py-1.5 text-sm text-green-600 dark:text-green-400">
+  <div className="size-2 rounded-full bg-green-500" />
+  <span>Active</span>
+</div>
+```
+
+## Accessibility
+
+### Focus States
+
+```tsx
+<button className="focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none">
+  Accessible focus
+</button>
+```
+
+### Screen Reader Only
+
+```tsx
+<span className="sr-only">Hidden from visual, visible to screen readers</span>
+```
+
+### ARIA Invalid States
+
+```tsx
+<input
+  aria-invalid={isInvalid}
+  className="aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
+/>
+```
+
+## Performance Tips
+
+<AccordionGroup>
+  <Accordion title="Avoid Arbitrary Values">
+    Use design tokens instead of arbitrary values:
+
+    ```tsx
+    {/* Avoid */}
+    <div className="text-[#ff0000]" />
+
+    {/* Prefer */}
+    <div className="text-destructive" />
+    ```
+  </Accordion>
+
+  <Accordion title="Use CSS Variables">
+    Leverage CSS variables for dynamic values:
+
+    ```tsx
+    <div style={{ '--size': '100px' }} className="w-[var(--size)]" />
+    ```
+  </Accordion>
+
+  <Accordion title="Group Similar Styles">
+    Use `@apply` for repeated patterns:
+
+    ```css
+    @layer components {
+      .btn-primary {
+        @apply bg-primary text-primary-foreground rounded-lg px-4 py-2 hover:bg-primary/80;
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Customization
+
+### Change Border Radius
+
+```css title="src/app/globals.css"
+:root {
+  --radius: 0.5rem; /* Change from 0.625rem to 0.5rem */
+}
+```
+
+### Add Custom Colors
+
+```css
+:root {
+  --success: oklch(0.7 0.15 145);
+  --success-foreground: oklch(0.98 0 0);
+}
+
+.dark {
+  --success: oklch(0.75 0.15 145);
+}
+
+@theme inline {
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+}
+```
+
+**Usage:**
+
+```tsx
+<div className="bg-success text-success-foreground">
+  Success message
+</div>
+```
+
+### Add Custom Font
+
+```css
+@import "@fontsource-variable/inter";
+
+@theme inline {
+  --font-sans: "Inter Variable", sans-serif;
+}
+```
+
+## Best Practices
+
+<Warning>
+  **Consistent Spacing**
+
+  Use the spacing scale consistently:
+
+  ```tsx
+  {/* Good */}
+  <div className="p-4 gap-4" />
+
+  {/* Avoid */}
+  <div className="p-[17px] gap-[15px]" />
+  ```
+</Warning>
+
+<Tip>
+  **Mobile First**
+
+  Write mobile styles first, then add responsive variants:
+
+  ```tsx
+  {/* Good */}
+  <div className="text-sm md:text-base lg:text-lg" />
+
+  {/* Avoid */}
+  <div className="lg:text-lg md:text-base text-sm" />
+  ```
+</Tip>
+
+<Info>
+  **Use Semantic Colors**
+
+  Use semantic color names instead of hardcoded values:
+
+  ```tsx
+  {/* Good */}
+  <p className="text-muted-foreground" />
+
+  {/* Avoid */}
+  <p className="text-gray-500 dark:text-gray-400" />
+  ```
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Components" icon="square-terminal" href="/frontend/components">
+    Explore UI components with pre-styled variants
+  </Card>
+  <Card title="Data Fetching" icon="database" href="/frontend/data-fetching">
+    Learn TanStack Query patterns
+  </Card>
+</CardGroup>

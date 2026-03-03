@@ -1,0 +1,122 @@
+---
+title: Backend Overview
+description: Hono framework architecture and server setup in ZeroStarter
+---
+
+## Architecture
+
+ZeroStarter's backend is built with [Hono](https://hono.dev), a lightweight and ultrafast web framework for the Edge. The API runs on Bun runtime and follows a modular architecture with routers, middleware, and validation layers.
+
+## Project Structure
+
+```
+api/hono/src/
+├── index.ts           # Main application entry point
+├── routers/           # Route definitions
+│   ├── auth.ts       # Authentication routes
+│   ├── v1.ts         # API v1 endpoints
+│   └── index.ts      # Router exports
+├── middlewares/       # Middleware functions
+│   ├── auth.ts       # Authentication middleware
+│   ├── rate-limiter.ts # Rate limiting
+│   └── index.ts      # Middleware exports
+└── lib/              # Utility functions
+    └── error.ts      # Error handling
+```
+
+## Server Setup
+
+The main application is configured in `index.ts:14-31`:
+
+```typescript
+import { Hono } from "hono"
+import { cors } from "hono/cors"
+import { logger } from "hono/logger"
+import { errorHandler } from "@/lib/error"
+import { rateLimiterMiddleware } from "@/middlewares"
+import { authRouter, v1Router } from "@/routers"
+
+const app = new Hono()
+
+app.use(
+  "*",
+  cors({
+    origin: env.HONO_TRUSTED_ORIGINS,
+    allowHeaders: ["content-type", "authorization"],
+    allowMethods: ["GET", "OPTIONS", "POST", "PUT"],
+    exposeHeaders: ["content-length"],
+    maxAge: 600,
+    credentials: true,
+  }),
+  logger(),
+  rateLimiterMiddleware,
+)
+
+app.onError(errorHandler)
+app.notFound((c) => c.json({ error: { code: "NOT_FOUND", message: "Not Found" } }, 404))
+```
+
+## Global Middleware
+
+Three middleware functions are applied to all routes:
+
+1. **CORS**: Configured for trusted origins with credentials support
+2. **Logger**: Request/response logging in development
+3. **Rate Limiter**: IP-based request throttling (see [Middleware](/backend/middleware))
+
+## Error Handling
+
+Global error handler processes unhandled errors and Zod validation failures (`lib/error.ts:6-18`):
+
+```typescript
+export const errorHandler = (err: Error, c: Context) => {
+  if (err instanceof z.ZodError) {
+    return c.json(
+      {
+        error: { code: "VALIDATION_ERROR", message: "Invalid request payload", issues: err.issues },
+      },
+      400,
+    )
+  }
+
+  const message = isLocal(env.NODE_ENV) ? err.message : "Internal Server Error"
+  return c.json({ error: { code: "INTERNAL_SERVER_ERROR", message } }, 500)
+}
+```
+
+## Runtime Configuration
+
+The server exports a Bun-compatible configuration (`index.ts:122-125`):
+
+```typescript
+export default {
+  port: env.HONO_PORT,
+  fetch: app.fetch,
+}
+```
+
+## Environment Variables
+
+Key configuration variables:
+
+- `HONO_PORT`: Server port (default: 3001)
+- `HONO_TRUSTED_ORIGINS`: Comma-separated list of allowed origins
+- `HONO_RATE_LIMIT`: Maximum requests per window
+- `HONO_RATE_LIMIT_WINDOW_MS`: Rate limit time window in milliseconds
+- `NODE_ENV`: Environment (local, development, test, staging, production)
+
+## Type-Safe Client Export
+
+The application exports its type signature for the frontend client (`index.ts:120`):
+
+```typescript
+export type AppType = typeof routes
+```
+
+This enables fully type-safe API calls from the frontend using `hono/client`.
+
+## Next Steps
+
+- [Routing](/backend/routing) - Learn about route definition and API structure
+- [Middleware](/backend/middleware) - Implement custom middleware
+- [Validation](/backend/validation) - Define request/response schemas

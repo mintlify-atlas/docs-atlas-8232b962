@@ -1,0 +1,425 @@
+---
+title: "Contributing"
+description: "Guidelines for contributing to ZeroStarter"
+icon: "code-pull-request"
+---
+
+## Overview
+
+We welcome contributions to ZeroStarter! This guide outlines the process for contributing code, documentation, and other improvements to the project. Following these guidelines helps ensure a smooth review process and maintains code quality.
+
+<Note>
+  By contributing, you agree to the MIT license and the project's Code of Conduct.
+</Note>
+
+## Quick Start
+
+Ready to contribute? Here's the fastest path:
+
+<Steps>
+  <Step title="Fork and clone">
+    Fork the [ZeroStarter repository](https://github.com/nrjdalal/zerostarter) and clone it locally:
+    
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/zerostarter.git
+    cd zerostarter
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    ```bash
+    bun install
+    ```
+  </Step>
+  
+  <Step title="Create a branch">
+    Use descriptive branch names following the convention:
+    
+    ```bash
+    git checkout -b feat/your-feature-name
+    # or
+    git checkout -b fix/issue-description
+    ```
+  </Step>
+  
+  <Step title="Make your changes">
+    Write code, add tests if applicable, and ensure all checks pass (see below).
+  </Step>
+  
+  <Step title="Submit a pull request">
+    Push your changes and open a PR with a clear description.
+  </Step>
+</Steps>
+
+## Branch Naming Convention
+
+Use descriptive branch names that indicate the type and purpose of your changes:
+
+| Type | Example | Use for |
+|------|---------|----------|
+| `feat/` | `feat/stripe-integration` | New features |
+| `fix/` | `fix/auth-redirect-loop` | Bug fixes |
+| `docs/` | `docs/update-readme` | Documentation updates |
+| `refactor/` | `refactor/api-error-handling` | Code refactoring |
+| `test/` | `test/add-auth-tests` | Adding tests |
+| `chore/` | `chore/update-dependencies` | Maintenance tasks |
+
+<Tip>
+  Good branch names: `feat/resend-email`, `fix/database-migration`, `docs/installation-guide`
+</Tip>
+
+## Development Workflow
+
+### 1. Set up your development environment
+
+Follow the [Installation guide](/getting-started/installation) to set up ZeroStarter locally:
+
+```bash
+# Install dependencies
+bun install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# Set up database
+bun run db:generate
+bun run db:migrate
+
+# Start development server
+bun dev
+```
+
+### 2. Make your changes
+
+Write clean, well-documented code following the existing code style.
+
+<Warning>
+  Do not comment unnecessarily. Only add comments if absolutely necessary. The code should be self-documenting.
+</Warning>
+
+**Code style guidelines:**
+
+- Use TypeScript for all new code
+- Use `@/` for imports where applicable
+- Follow existing patterns in the codebase
+- Keep functions small and focused
+- Use descriptive variable and function names
+
+### 3. Run quality checks
+
+Before submitting your PR, ensure all checks pass:
+
+```bash
+# Build all packages
+bun run build
+
+# Type checking
+bun run check-types
+
+# Format code
+bun run format
+
+# Lint code
+bun run lint
+```
+
+<Note>
+  All of these checks must pass for your PR to be merged. Fix any errors before submitting.
+</Note>
+
+### 4. Test your changes
+
+While ZeroStarter doesn't currently have automated tests, you should:
+
+1. **Manually test** your changes thoroughly
+2. **Test in both development and production builds:**
+   ```bash
+   bun run build
+   bun run start
+   ```
+3. **Test edge cases** and error scenarios
+4. **Verify existing functionality** still works
+
+<Tip>
+  If you're adding a new feature, consider adding tests. Contributions that include tests are highly valued!
+</Tip>
+
+### 5. Commit your changes
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+```bash
+git commit -m "feat: add Stripe payment integration"
+git commit -m "fix: resolve OAuth redirect loop"
+git commit -m "docs: update installation guide"
+git commit -m "refactor: simplify API error handling"
+```
+
+**Commit message format:**
+
+```
+<type>: <description>
+
+[optional body]
+
+[optional footer]
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `refactor`: Code refactoring (no functionality change)
+- `test`: Adding or updating tests
+- `chore`: Maintenance tasks (dependencies, configs, etc.)
+- `perf`: Performance improvements
+- `style`: Code style changes (formatting, not CSS)
+
+**Examples:**
+
+```bash
+feat: add email verification with Resend
+
+fix: prevent double form submission on auth pages
+
+docs: add troubleshooting section for database issues
+
+refactor: extract validation schemas to separate files
+```
+
+<Warning>
+  Lefthook is configured to run commitlint on commit messages. Invalid commit messages will be rejected.
+</Warning>
+
+## Pull Request Guidelines
+
+### Before submitting
+
+- ✅ All quality checks pass (`build`, `check-types`, `format`, `lint`)
+- ✅ Changes are tested manually
+- ✅ Commit messages follow conventional commits
+- ✅ Branch is up to date with `main` or `canary`
+- ✅ No unnecessary files committed (build artifacts, `.env`, etc.)
+
+### PR description template
+
+Provide a clear description of your changes:
+
+```markdown
+## Description
+
+Brief summary of what this PR does.
+
+## Type of change
+
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
+
+## Changes made
+
+- List specific changes
+- Include relevant details
+- Explain decisions if needed
+
+## Testing
+
+How did you test this? What scenarios did you cover?
+
+## Related issues
+
+Closes #123
+Related to #456
+
+## Migration notes
+
+Any breaking changes or migration steps required?
+
+## Screenshots (if applicable)
+
+Add screenshots for UI changes.
+```
+
+### Review process
+
+1. **Automated checks** run on your PR (type checking, linting)
+2. **Maintainer review** - we'll review your code and provide feedback
+3. **Address feedback** - make requested changes
+4. **Approval and merge** - once approved, your PR will be merged
+
+<Tip>
+  PRs are usually reviewed within 1-3 days. Larger changes may take longer.
+</Tip>
+
+## Types of Contributions
+
+### Bug Fixes
+
+<Card title="Found a bug?" icon="bug">
+  1. Check if an issue already exists
+  2. Open a new issue if needed
+  3. Create a PR with the fix
+  4. Link the issue in your PR description
+</Card>
+
+**Bug fix checklist:**
+- Identify the root cause
+- Write a fix that addresses the cause
+- Verify the fix doesn't break other functionality
+- Test edge cases
+- Document the fix in the commit message
+
+### New Features
+
+<Warning>
+  For large features or breaking changes, open an issue first to discuss the approach. This prevents wasted effort if the feature doesn't align with project goals.
+</Warning>
+
+**Feature contribution checklist:**
+- Open an issue to discuss the feature
+- Get approval from maintainers
+- Implement the feature following existing patterns
+- Update documentation
+- Add examples if applicable
+- Ensure backward compatibility (or document breaking changes)
+
+### Documentation
+
+Documentation improvements are always welcome!
+
+**Documentation contributions:**
+- Fix typos or unclear explanations
+- Add missing documentation
+- Improve examples
+- Add troubleshooting guides
+- Translate documentation (if supported)
+
+**Documentation is located in:**
+- `README.md` - Project overview
+- `web/next/content/docs/` - Full documentation (if using Fumadocs)
+
+### Integrations
+
+Planning to add an integration from the [roadmap](/resources/roadmap)?
+
+<Steps>
+  <Step title="Check the roadmap">
+    See the [roadmap](/resources/roadmap) for planned integrations and their priority.
+  </Step>
+  
+  <Step title="Open an issue">
+    Discuss your implementation approach before starting work.
+  </Step>
+  
+  <Step title="Follow the pattern">
+    Look at existing integrations (Better Auth, PostHog) for patterns to follow.
+  </Step>
+  
+  <Step title="Make it optional">
+    Integrations should be optional and configurable via environment variables.
+  </Step>
+  
+  <Step title="Document it">
+    Add documentation explaining how to set up and use the integration.
+  </Step>
+</Steps>
+
+## Code Review Guidelines
+
+When reviewing others' contributions:
+
+<AccordionGroup>
+  <Accordion title="Focus on substance" icon="magnifying-glass">
+    - Is the code correct and bug-free?
+    - Does it follow existing patterns?
+    - Is it well-structured and maintainable?
+    - Are there edge cases to consider?
+  </Accordion>
+  
+  <Accordion title="Be constructive" icon="comments">
+    - Explain *why* something should change
+    - Suggest alternatives
+    - Acknowledge good work
+    - Be respectful and professional
+  </Accordion>
+  
+  <Accordion title="Test the changes" icon="vial">
+    - Pull the branch and test locally
+    - Verify the changes work as described
+    - Check for unintended side effects
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+Need help contributing?
+
+<CardGroup cols={2}>
+  <Card title="Ask in Issues" icon="github" href="https://github.com/nrjdalal/zerostarter/issues">
+    Open an issue with your question.
+  </Card>
+  
+  <Card title="Check Documentation" icon="book" href="/">
+    Review the full documentation.
+  </Card>
+  
+  <Card title="FAQ" icon="circle-question" href="/resources/faq">
+    Check frequently asked questions.
+  </Card>
+  
+  <Card title="Follow Updates" icon="twitter" href="https://twitter.com/nrjdalal">
+    Follow @nrjdalal for updates.
+  </Card>
+</CardGroup>
+
+## Code of Conduct
+
+### Our Standards
+
+We are committed to providing a welcoming and inclusive environment:
+
+- **Be respectful** - Value differing opinions and experiences
+- **Be collaborative** - Work together toward the best solution
+- **Be professional** - Keep discussions focused and constructive
+- **Be open** - Welcome newcomers and help them learn
+
+### Unacceptable Behavior
+
+- Harassment or discriminatory language
+- Personal attacks or insults
+- Trolling or inflammatory comments
+- Publishing others' private information
+- Other conduct inappropriate in a professional setting
+
+<Warning>
+  Violations of the Code of Conduct may result in removal from the project.
+</Warning>
+
+## License
+
+By contributing to ZeroStarter, you agree that your contributions will be licensed under the [MIT License](https://github.com/nrjdalal/zerostarter/blob/main/LICENSE.md).
+
+This means:
+- Your code can be used freely by anyone
+- No warranty or liability
+- Attribution to original authors is preserved
+
+## Recognition
+
+All contributors are recognized in the repository:
+
+<Card title="Amazing Contributors" icon="heart" href="https://github.com/nrjdalal/zerostarter/graphs/contributors">
+  See all contributors who have helped build ZeroStarter.
+</Card>
+
+Your GitHub profile will be displayed on the README once your PR is merged!
+
+## Thank You!
+
+<Note>
+  Thank you for contributing to ZeroStarter! Every contribution, no matter how small, helps make the project better for everyone.
+</Note>
+
+Questions about contributing? [Open an issue](https://github.com/nrjdalal/zerostarter/issues) and we'll help you get started!

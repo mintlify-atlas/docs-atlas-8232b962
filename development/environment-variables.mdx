@@ -1,0 +1,339 @@
+---
+title: Environment Variables
+description: Complete guide to environment variables and configuration in ZeroStarter
+---
+
+ZeroStarter uses environment variables for configuration across the monorepo. Copy `.env.example` to `.env` in the root directory to get started.
+
+```bash
+cp .env.example .env
+```
+
+## Environment Files
+
+ZeroStarter uses a type-safe environment validation system powered by `@t3-oss/env-core` in the `@packages/env` workspace.
+
+**Location:** `packages/env/`
+
+**Validation:** All environment variables are validated at build time and runtime
+
+## Server Variables
+
+These variables configure the Hono API server (`api/hono`).
+
+### `NODE_ENV`
+
+```bash
+NODE_ENV=local
+```
+
+**Values:** `local`, `development`, `production`
+
+**Usage:** Determines the runtime environment and enables/disables certain features
+
+### `HONO_APP_URL`
+
+```bash
+HONO_APP_URL=http://localhost:4000
+```
+
+**Required:** Yes
+
+**Description:** The base URL where the Hono API server is running
+
+**Production:** Set to your API domain (e.g., `https://api.example.com`)
+
+### `HONO_TRUSTED_ORIGINS`
+
+```bash
+HONO_TRUSTED_ORIGINS=http://localhost:3000
+```
+
+**Required:** Yes
+
+**Description:** Comma-separated list of allowed CORS origins
+
+**Production example:**
+```bash
+HONO_TRUSTED_ORIGINS=https://example.com,https://www.example.com
+```
+
+### Rate Limiting
+
+#### `HONO_RATE_LIMIT`
+
+```bash
+HONO_RATE_LIMIT=60
+```
+
+**Default:** 60
+
+**Description:** Maximum number of requests per window (per IP)
+
+- Unauthenticated users: 60 requests per minute
+- Authenticated users: 120 requests per minute (2x the limit)
+
+#### `HONO_RATE_LIMIT_WINDOW_MS`
+
+```bash
+HONO_RATE_LIMIT_WINDOW_MS=60000
+```
+
+**Default:** 60000 (1 minute)
+
+**Description:** Time window in milliseconds for rate limiting
+
+**Examples:**
+```bash
+# 5 minutes
+HONO_RATE_LIMIT_WINDOW_MS=300000
+
+# 15 minutes
+HONO_RATE_LIMIT_WINDOW_MS=900000
+```
+
+### Authentication
+
+#### `BETTER_AUTH_SECRET`
+
+```bash
+BETTER_AUTH_SECRET=
+```
+
+**Required:** Yes
+
+**Description:** Secret key for Better Auth session encryption
+
+**Generate:**
+```bash
+openssl rand -base64 32
+```
+
+**Security:** Keep this secret and never commit it to version control. Rotate regularly in production.
+
+#### GitHub OAuth
+
+```bash
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+```
+
+**Required:** For GitHub authentication
+
+**Setup:**
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+2. Create a new OAuth App
+3. Set Authorization callback URL to: `{HONO_APP_URL}/api/auth/callback/github`
+4. Copy Client ID and generate a Client Secret
+
+**Callback URL examples:**
+- Local: `http://localhost:4000/api/auth/callback/github`
+- Production: `https://api.example.com/api/auth/callback/github`
+
+#### Google OAuth
+
+```bash
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+```
+
+**Required:** For Google authentication
+
+**Setup:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create a new OAuth 2.0 Client ID
+3. Add authorized redirect URI: `{HONO_APP_URL}/api/auth/callback/google`
+4. Copy Client ID and Client Secret
+
+**Redirect URI examples:**
+- Local: `http://localhost:4000/api/auth/callback/google`
+- Production: `https://api.example.com/api/auth/callback/google`
+
+### Database
+
+#### `POSTGRES_URL`
+
+```bash
+POSTGRES_URL=
+```
+
+**Required:** Yes
+
+**Description:** PostgreSQL connection string
+
+**Format:**
+```bash
+POSTGRES_URL=postgresql://user:password@host:port/database
+```
+
+**Quick setup with pglaunch:**
+```bash
+bunx pglaunch -k
+```
+
+This launches a local PostgreSQL instance and generates the connection string.
+
+**Production providers:**
+- [Neon](https://neon.tech/) - Serverless Postgres
+- [Supabase](https://supabase.com/) - Postgres with auth and storage
+- [Railway](https://railway.app/) - Easy deployment platform
+- [Vercel Postgres](https://vercel.com/storage/postgres) - Integrated with Vercel
+
+## Client Variables
+
+These variables configure the Next.js web application (`web/next`). All client variables must be prefixed with `NEXT_PUBLIC_` to be exposed to the browser.
+
+### `NEXT_PUBLIC_APP_URL`
+
+```bash
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+**Required:** Yes
+
+**Description:** The base URL where the Next.js app is running
+
+**Production:** Set to your frontend domain (e.g., `https://example.com`)
+
+### `NEXT_PUBLIC_API_URL`
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:4000
+```
+
+**Required:** Yes
+
+**Description:** The base URL of the Hono API server (must match `HONO_APP_URL`)
+
+**Production:** Set to your API domain (e.g., `https://api.example.com`)
+
+### Analytics (Optional)
+
+#### PostHog Analytics
+
+```bash
+NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+NEXT_PUBLIC_POSTHOG_KEY=
+```
+
+**Required:** No
+
+**Description:** PostHog analytics configuration for user tracking and feature flags
+
+**Setup:**
+1. Create a [PostHog account](https://posthog.com/)
+2. Create a new project
+3. Copy the Project API Key
+4. Choose your region:
+   - US: `https://us.i.posthog.com`
+   - EU: `https://eu.i.posthog.com`
+
+**Documentation:** [PostHog Setup Guide](/features/analytics)
+
+### User Feedback (Optional)
+
+#### `NEXT_PUBLIC_USERJOT_URL`
+
+```bash
+NEXT_PUBLIC_USERJOT_URL=
+```
+
+**Required:** No
+
+**Description:** UserJot widget URL for collecting user feedback
+
+**Note:** UserJot integration is optional and not yet documented. Leave empty if not using.
+
+## Turbo Environment Variables
+
+Turborepo automatically passes these environment variables to all workspaces. This is configured in `turbo.json`:
+
+```json
+{
+  "globalEnv": [
+    "SKIP_ENV_VALIDATION",
+    "NODE_ENV",
+    "BETTER_AUTH_SECRET",
+    "GITHUB_CLIENT_ID",
+    "GITHUB_CLIENT_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "HONO_APP_URL",
+    "HONO_TRUSTED_ORIGINS",
+    "POSTGRES_URL",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_APP_URL",
+    "NEXT_PUBLIC_POSTHOG_HOST",
+    "NEXT_PUBLIC_POSTHOG_KEY",
+    "NEXT_PUBLIC_USERJOT_URL"
+  ]
+}
+```
+
+## CI/CD Variables
+
+### `SKIP_ENV_VALIDATION`
+
+```bash
+SKIP_ENV_VALIDATION=true
+```
+
+**Required:** No
+
+**Description:** Skip environment variable validation during build
+
+**Use case:** When building in CI/CD where some variables aren't needed yet (e.g., building a Docker image)
+
+**Warning:** Only use this in CI/CD. Never skip validation in production.
+
+## Environment Variable Validation
+
+ZeroStarter uses `@t3-oss/env-core` for type-safe environment variables. The validation schema is defined in `packages/env/`.
+
+**Benefits:**
+- Type-safe access to environment variables
+- Runtime validation on startup
+- Build-time validation
+- Autocomplete in your IDE
+- Prevents deployment with missing/invalid variables
+
+**Usage in code:**
+```typescript
+import { env } from '@packages/env'
+
+// Fully typed and validated
+const apiUrl = env.NEXT_PUBLIC_API_URL
+const dbUrl = env.POSTGRES_URL
+```
+
+## Security Best Practices
+
+1. **Never commit `.env` files** - They're in `.gitignore` by default
+2. **Rotate secrets regularly** - Especially `BETTER_AUTH_SECRET`
+3. **Use different secrets per environment** - Don't reuse development secrets in production
+4. **Restrict OAuth redirect URIs** - Only whitelist your actual domains
+5. **Use HTTPS in production** - All URLs should use `https://`
+6. **Limit CORS origins** - Only allow trusted domains in `HONO_TRUSTED_ORIGINS`
+7. **Keep `.env.example` updated** - Document all required variables without exposing values
+
+## Troubleshooting
+
+### "Environment variable X is missing"
+
+1. Ensure `.env` exists in the root directory
+2. Check that the variable is defined in `.env`
+3. Rebuild `@packages/env`: `bun run build --filter=@packages/env`
+4. Restart your development server
+
+### OAuth callback errors
+
+1. Verify callback URLs match exactly (including protocol and port)
+2. Check that `HONO_APP_URL` is correct
+3. Ensure OAuth app is configured with the correct redirect URI
+
+### Database connection issues
+
+1. Verify `POSTGRES_URL` format is correct
+2. Test connection: `bun run db:studio`
+3. Check database is running and accessible
+4. Ensure firewall allows connections (for remote databases)

@@ -1,0 +1,453 @@
+---
+title: Testing
+description: Testing setup and patterns for ZeroStarter
+---
+
+ZeroStarter currently does not include test files, but this guide documents how to set up testing for future development.
+
+## Current State
+
+No test files (`.test.*` or `.spec.*`) exist in the monorepo. The project focuses on:
+
+- Type safety via TypeScript
+- Runtime validation via Zod schemas
+- Code quality via Oxlint and Oxfmt
+- Pre-commit validation via Lefthook
+
+## Recommended Testing Setup
+
+When you're ready to add tests, here's the recommended approach for ZeroStarter's tech stack.
+
+### Testing Framework
+
+Use **Bun's built-in test runner** - it's fast, has zero configuration, and integrates perfectly with the existing Bun setup.
+
+**Why Bun test?**
+- Built into Bun (already installed)
+- No additional dependencies
+- Jest-compatible API
+- Native TypeScript support
+- Extremely fast execution
+- Built-in code coverage
+
+### Installation
+
+No installation needed! Bun's test runner is built-in.
+
+### Basic Test Structure
+
+Create test files alongside your source code:
+
+```
+src/
+  utils/
+    format.ts
+    format.test.ts
+  api/
+    users.ts
+    users.test.ts
+```
+
+### Example: Unit Test
+
+```typescript
+import { describe, test, expect } from 'bun:test'
+import { formatUsername } from './format'
+
+describe('formatUsername', () => {
+  test('capitalizes first letter', () => {
+    expect(formatUsername('john')).toBe('John')
+  })
+
+  test('handles empty string', () => {
+    expect(formatUsername('')).toBe('')
+  })
+
+  test('preserves existing capitalization', () => {
+    expect(formatUsername('JOHN')).toBe('JOHN')
+  })
+})
+```
+
+### Example: API Test (Hono)
+
+```typescript
+import { describe, test, expect } from 'bun:test'
+import { app } from './index'
+
+describe('GET /api/health', () => {
+  test('returns 200 OK', async () => {
+    const res = await app.request('/api/health')
+    expect(res.status).toBe(200)
+  })
+
+  test('returns correct body', async () => {
+    const res = await app.request('/api/health')
+    const body = await res.json()
+    expect(body).toEqual({ status: 'ok' })
+  })
+})
+```
+
+### Example: Database Test (Drizzle)
+
+```typescript
+import { describe, test, expect, beforeEach } from 'bun:test'
+import { db } from '@packages/db'
+import { users } from '@packages/db/schema'
+import { eq } from 'drizzle-orm'
+
+describe('User queries', () => {
+  beforeEach(async () => {
+    // Clean up test data
+    await db.delete(users).where(eq(users.email, 'test@example.com'))
+  })
+
+  test('creates a new user', async () => {
+    const [user] = await db
+      .insert(users)
+      .values({
+        email: 'test@example.com',
+        name: 'Test User',
+      })
+      .returning()
+
+    expect(user.email).toBe('test@example.com')
+    expect(user.name).toBe('Test User')
+  })
+})
+```
+
+### Example: React Component Test
+
+For Next.js components, use **React Testing Library** with Bun:
+
+```bash
+bun add -d @testing-library/react @testing-library/jest-dom happy-dom
+```
+
+```typescript
+import { describe, test, expect } from 'bun:test'
+import { render, screen } from '@testing-library/react'
+import { Button } from './button'
+
+describe('Button', () => {
+  test('renders children', () => {
+    render(<Button>Click me</Button>)
+    expect(screen.getByText('Click me')).toBeInTheDocument()
+  })
+
+  test('applies variant styles', () => {
+    render(<Button variant="destructive">Delete</Button>)
+    const button = screen.getByRole('button')
+    expect(button).toHaveClass('destructive')
+  })
+})
+```
+
+## Running Tests
+
+### Run all tests
+
+```bash
+bun test
+```
+
+### Watch mode
+
+```bash
+bun test --watch
+```
+
+### Run specific test file
+
+```bash
+bun test src/utils/format.test.ts
+```
+
+### Code coverage
+
+```bash
+bun test --coverage
+```
+
+## Workspace-Specific Testing
+
+Add test scripts to workspace `package.json` files:
+
+### Hono API (`api/hono/package.json`)
+
+```json
+{
+  "scripts": {
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage"
+  }
+}
+```
+
+### Next.js Web (`web/next/package.json`)
+
+```json
+{
+  "scripts": {
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage"
+  }
+}
+```
+
+### Root `package.json`
+
+```json
+{
+  "scripts": {
+    "test": "turbo run test --summarize",
+    "test:watch": "turbo run test:watch"
+  }
+}
+```
+
+## Testing Patterns
+
+### 1. Test Environment Variables
+
+Create a test environment config:
+
+```typescript
+// test/setup.ts
+import { beforeAll } from 'bun:test'
+
+beforeAll(() => {
+  process.env.NODE_ENV = 'test'
+  process.env.SKIP_ENV_VALIDATION = 'true'
+  process.env.POSTGRES_URL = 'postgresql://test:test@localhost:5432/test'
+})
+```
+
+Load in `bunfig.toml`:
+
+```toml
+[test]
+preload = ["./test/setup.ts"]
+```
+
+### 2. Mock Database for Tests
+
+Use a separate test database:
+
+```bash
+# .env.test
+POSTGRES_URL=postgresql://test:test@localhost:5432/test_db
+```
+
+### 3. API Testing Best Practices
+
+```typescript
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
+import { app } from './index'
+
+let testServer: ReturnType<typeof app.listen>
+
+beforeAll(() => {
+  testServer = app.listen({ port: 0 }) // Random port
+})
+
+afterAll(() => {
+  testServer.close()
+})
+
+describe('Authentication', () => {
+  test('requires auth for protected routes', async () => {
+    const res = await app.request('/api/user/profile')
+    expect(res.status).toBe(401)
+  })
+})
+```
+
+### 4. Testing Zod Schemas
+
+```typescript
+import { describe, test, expect } from 'bun:test'
+import { userSchema } from './schemas'
+
+describe('userSchema', () => {
+  test('validates correct data', () => {
+    const data = { email: 'test@example.com', name: 'Test' }
+    const result = userSchema.safeParse(data)
+    expect(result.success).toBe(true)
+  })
+
+  test('rejects invalid email', () => {
+    const data = { email: 'invalid', name: 'Test' }
+    const result = userSchema.safeParse(data)
+    expect(result.success).toBe(false)
+  })
+})
+```
+
+## Integration with Code Quality Tools
+
+### Add test to pre-commit hook
+
+Update `lefthook.yml`:
+
+```yaml
+pre-commit:
+  commands:
+    test:
+      run: bun run test
+    lint-staged:
+      run: bunx lint-staged --verbose
+      stage_fixed: true
+```
+
+### Add test to CI/CD
+
+```yaml
+# GitHub Actions
+- name: Run tests
+  run: bun run test --coverage
+
+- name: Upload coverage
+  uses: codecov/codecov-action@v3
+  with:
+    files: ./coverage/coverage-final.json
+```
+
+## Testing Resources
+
+### Official Documentation
+
+- [Bun Test Runner](https://bun.sh/docs/cli/test) - Official Bun testing docs
+- [React Testing Library](https://testing-library.com/react) - Component testing
+- [Testing Best Practices](https://kentcdodds.com/blog/common-mistakes-with-react-testing-library) - By Kent C. Dodds
+
+### Recommended Libraries
+
+```bash
+# Component testing
+bun add -d @testing-library/react @testing-library/jest-dom happy-dom
+
+# User interactions
+bun add -d @testing-library/user-event
+
+# API mocking
+bun add -d msw
+
+# Snapshot testing
+# Built into Bun test
+```
+
+## Next Steps
+
+1. **Start small** - Add tests for critical business logic first
+2. **Test user flows** - Focus on what users actually do
+3. **Avoid testing implementation details** - Test behavior, not internals
+4. **Maintain fast tests** - Keep test suite under 10 seconds
+5. **Use factories** - Create test data builders for common objects
+6. **Mock external services** - Don't call real APIs in tests
+
+## Example Test Structure
+
+```
+zerostarter/
+├── api/
+│   └── hono/
+│       ├── src/
+│       │   ├── routes/
+│       │   │   ├── auth.ts
+│       │   │   └── auth.test.ts
+│       │   ├── utils/
+│       │   │   ├── validation.ts
+│       │   │   └── validation.test.ts
+│       │   └── index.test.ts
+│       └── test/
+│           └── setup.ts
+├── web/
+│   └── next/
+│       ├── src/
+│       │   ├── components/
+│       │   │   ├── ui/
+│       │   │   │   ├── button.tsx
+│       │   │   │   └── button.test.tsx
+│       │   └── app/
+│       │       ├── page.tsx
+│       │       └── page.test.tsx
+│       └── test/
+│           └── setup.ts
+└── packages/
+    └── db/
+        ├── src/
+        │   ├── queries/
+        │   │   ├── users.ts
+        │   │   └── users.test.ts
+        │   └── schema.test.ts
+        └── test/
+            └── setup.ts
+```
+
+## Common Testing Scenarios
+
+### Testing Authentication
+
+```typescript
+import { describe, test, expect } from 'bun:test'
+import { app } from './index'
+
+describe('Authentication', () => {
+  test('login with valid credentials', async () => {
+    const res = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'user@example.com',
+        password: 'password123',
+      }),
+    })
+    expect(res.status).toBe(200)
+  })
+})
+```
+
+### Testing Rate Limiting
+
+```typescript
+import { describe, test, expect } from 'bun:test'
+import { app } from './index'
+
+describe('Rate limiting', () => {
+  test('blocks after exceeding limit', async () => {
+    // Make 61 requests (limit is 60)
+    for (let i = 0; i < 61; i++) {
+      await app.request('/api/endpoint')
+    }
+
+    const res = await app.request('/api/endpoint')
+    expect(res.status).toBe(429) // Too Many Requests
+  })
+})
+```
+
+### Testing Form Validation
+
+```typescript
+import { describe, test, expect } from 'bun:test'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { LoginForm } from './login-form'
+
+describe('LoginForm', () => {
+  test('shows error for invalid email', async () => {
+    const user = userEvent.setup()
+    render(<LoginForm />)
+
+    await user.type(screen.getByLabelText('Email'), 'invalid-email')
+    await user.click(screen.getByRole('button', { name: 'Login' }))
+
+    expect(screen.getByText('Invalid email')).toBeInTheDocument()
+  })
+})
+```

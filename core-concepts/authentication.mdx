@@ -1,0 +1,500 @@
+---
+title: Authentication
+description: Better Auth setup, configuration, and usage patterns
+---
+
+ZeroStarter uses [Better Auth](https://better-auth.com) for authentication, providing a flexible and type-safe auth system with support for multiple providers, organizations, and teams.
+
+## Architecture
+
+Authentication is configured in the `@packages/auth` workspace package and used by both the Hono API and Next.js frontend.
+
+```
+packages/auth/
+├── src/
+│   ├── index.ts      # Better Auth configuration
+│   └── lib/
+│       └── utils.ts  # Cookie helpers
+└── package.json
+```
+
+## Server Configuration
+
+### Better Auth Instance
+
+The auth instance is configured with database adapter, providers, and plugins:
+
+```typescript title="packages/auth/src/index.ts"
+import { betterAuth } from "better-auth"
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { openAPI, organization } from "better-auth/plugins"
+import { db, user, session, account, /* ... */ } from "@packages/db"
+import { env } from "@packages/env/auth"
+
+export const auth = betterAuth({
+  baseURL: env.HONO_APP_URL,
+  trustedOrigins: env.HONO_TRUSTED_ORIGINS,
+  
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: {
+      account,
+      invitation,
+      member,
+      organization,
+      session,
+      team,
+      teamMember,
+      user,
+      verification,
+    },
+  }),
+  
+  onAPIError: {
+    throw: true,
+  },
+  
+  plugins: [
+    openAPI(),
+    organization({
+      teams: { enabled: true },
+    }),
+  ],
+  
+  socialProviders: {
+    github: {
+      clientId: env.GITHUB_CLIENT_ID,
+      clientSecret: env.GITHUB_CLIENT_SECRET,
+    },
+    google: {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    },
+  },
+})
+
+export type Session = typeof auth.$Infer.Session
+```
+
+### Database Adapter
+
+Better Auth uses Drizzle ORM to store auth data in PostgreSQL:
+
+- **user** - User accounts with email, name, and verification status
+- **session** - Active user sessions with tokens and expiry
+- **account** - OAuth provider accounts linked to users
+- **verification** - Email verification codes
+- **organization** - Multi-tenant organizations
+- **team** - Teams within organizations
+- **member** - Organization membership with roles
+- **invitation** - Pending organization invitations
+
+See [Database](/core-concepts/database) for full schema details.
+
+### Environment-Based Cookie Configuration
+
+Cookie domains and prefixes are configured based on the deployment environment:
+
+```typescript title="packages/auth/src/lib/utils.ts"
+/**
+ * Extracts the cookie domain from a URL for cross-subdomain cookie sharing.
+ *
+ * @example
+ * getCookieDomain("https://api.zerostarter.dev")             // ".zerostarter.dev"
+ * getCookieDomain("https://api.canary.zerostarter.dev")      // ".canary.zerostarter.dev"
+ * getCookieDomain("http://localhost:4000")                   // undefined
+ */
+export function getCookieDomain(url: string): string | undefined {
+  try {
+    const { hostname } = new URL(url)
+    if (hostname === "localhost" || hostname === "127.0.0.1") return undefined
+    const parts = hostname.split(".")
+    if (parts.length <= 2) return undefined
+    return `.${parts.slice(1).join(".")}`
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Extracts the cookie prefix from a URL for environment-specific cookie isolation.
+ * Returns undefined for production (uses Better Auth default prefix).
+ */
+export function getCookiePrefix(url: string): string | undefined {
+  try {
+    const { hostname } = new URL(url)
+    if (hostname === "localhost" || hostname === "127.0.0.1") return undefined
+    const parts = hostname.split(".")
+    // 4+ parts means environment subdomain: api.canary.zerostarter.dev
+    if (parts.length >= 4) return parts[1]
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+```
+
+Usage in auth config:
+
+```typescript
+const cookieDomain = getCookieDomain(env.HONO_APP_URL)
+const cookiePrefix = getCookiePrefix(env.HONO_APP_URL)
+
+export const auth = betterAuth({
+  // ...
+  advanced: {
+    ...(cookiePrefix && { cookiePrefix }),
+    ...(cookieDomain && {
+      crossSubDomainCookies: {
+        enabled: true,
+        domain: cookieDomain,
+      },
+    }),
+  },
+})
+```
+
+This allows different environments (canary, dev, staging) to use separate cookies while sharing them across subdomains.
+
+## API Integration
+
+### Auth Router
+
+The Hono API exposes Better Auth endpoints:
+
+```typescript title="api/hono/src/routers/auth.ts"
+import { auth } from "@packages/auth"
+import { Hono } from "hono"
+
+export const authRouter = new Hono()
+  .get("/get-session", (c) => auth.handler(c.req.raw))
+  .on(["GET", "POST"], "/*", (c) => auth.handler(c.req.raw))
+```
+
+This mounts Better Auth at `/api/auth/*`, providing all auth endpoints:
+
+- `/api/auth/sign-in/social` - OAuth sign-in
+- `/api/auth/sign-in/magic-link` - Email magic link
+- `/api/auth/sign-out` - Sign out
+- `/api/auth/get-session` - Get current session
+- `/api/auth/organization/*` - Organization management
+
+### Auth Middleware
+
+Protect routes by validating sessions:
+
+```typescript title="api/hono/src/middlewares/auth.ts"
+import type { Session } from "@packages/auth"
+import { auth } from "@packages/auth"
+import { createMiddleware } from "hono/factory"
+
+export const authMiddleware = createMiddleware<{ Variables: Session }>(
+  async (c, next) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+
+    if (!session) {
+      return c.json(
+        { error: { code: "UNAUTHORIZED", message: "Unauthorized" } },
+        401
+      )
+    }
+
+    c.set("session", session.session)
+    c.set("user", session.user)
+
+    return next()
+  }
+)
+```
+
+Usage in routes:
+
+```typescript title="api/hono/src/routers/v1.ts"
+import { Hono } from "hono"
+import { authMiddleware } from "@/middlewares"
+
+export const v1Router = new Hono<{
+  Variables: Session
+}>()
+  .use("/*", authMiddleware)
+  .get("/user", (c) => {
+    const data = c.get("user")
+    return c.json({ data })
+  })
+```
+
+## Client Usage
+
+### Auth Client Setup
+
+The frontend creates a Better Auth client:
+
+```typescript title="web/next/src/lib/auth/client.ts"
+import { magicLinkClient, organizationClient } from "better-auth/client/plugins"
+import { createAuthClient } from "better-auth/react"
+import { config } from "@/lib/config"
+
+export const authClient = createAuthClient({
+  baseURL: `${config.api.url}/api/auth`,
+  plugins: [
+    magicLinkClient(),
+    organizationClient({ teams: { enabled: true } }),
+  ],
+})
+```
+
+### Sign In with OAuth
+
+Social authentication with GitHub or Google:
+
+```typescript title="components/access.tsx"
+import { authClient } from "@/lib/auth/client"
+import { config } from "@/lib/config"
+
+// GitHub OAuth
+const handleGithubSignIn = async () => {
+  const res = await authClient.signIn.social({
+    provider: "github",
+    callbackURL: `${config.app.url}/dashboard`,
+  })
+  
+  if (res.error) {
+    toast.error(res.error.message)
+  }
+}
+
+// Google OAuth
+const handleGoogleSignIn = async () => {
+  const res = await authClient.signIn.social({
+    provider: "google",
+    callbackURL: `${config.app.url}/dashboard`,
+  })
+  
+  if (res.error) {
+    toast.error(res.error.message)
+  }
+}
+```
+
+### Sign In with Magic Link
+
+Passwordless email authentication:
+
+```typescript
+const handleMagicLinkSignIn = async (email: string) => {
+  const res = await authClient.signIn.magicLink({
+    email,
+    callbackURL: `${config.app.url}/dashboard`,
+  })
+  
+  if (res.error) {
+    toast.error(res.error.message || "Provider Not Found")
+  } else {
+    toast.success("Check your email for the magic link!")
+  }
+}
+```
+
+### Sign Out
+
+```typescript
+const handleSignOut = async () => {
+  await authClient.signOut()
+  window.location.href = "/"
+}
+```
+
+## Server-Side Session Management
+
+### Getting Session in Server Components
+
+Retrieve the current session:
+
+```typescript title="web/next/src/lib/auth/index.ts"
+import type { Session } from "@packages/auth"
+import { headers } from "next/headers"
+import { apiClient } from "@/lib/api/client"
+
+export const auth = {
+  api: {
+    getSession: async () => {
+      try {
+        const response = await apiClient.auth["get-session"].$get(
+          undefined,
+          {
+            headers: Object.fromEntries((await headers()).entries()),
+          }
+        )
+        if (!response.ok) return null
+        const text = await response.text()
+        if (!text) return null
+        return JSON.parse(text) as Session | null
+      } catch {
+        return null
+      }
+    },
+  },
+}
+```
+
+### Protecting Pages
+
+Redirect unauthorized users:
+
+```typescript title="app/(protected)/layout.tsx"
+import { redirect } from "next/navigation"
+import { auth } from "@/lib/auth"
+
+export default async function Layout({ children }) {
+  const session = await auth.api.getSession()
+
+  if (!session?.user) {
+    redirect("/")
+  }
+
+  return <>{children}</>
+}
+```
+
+### Accessing User Data
+
+```typescript
+export default async function DashboardLayout({ children }) {
+  const session = await auth.api.getSession()
+  
+  return (
+    <div>
+      <header>
+        <p>Welcome, {session?.user.name}</p>
+        <img src={session?.user.image} alt="Avatar" />
+      </header>
+      {children}
+    </div>
+  )
+}
+```
+
+## Session Type
+
+The `Session` type is exported from `@packages/auth`:
+
+```typescript
+export type Session = typeof auth.$Infer.Session
+```
+
+This provides type safety for session data:
+
+```typescript
+interface Session {
+  session: {
+    id: string
+    userId: string
+    expiresAt: Date
+    token: string
+    ipAddress: string | null
+    userAgent: string | null
+    activeOrganizationId: string | null
+  }
+  user: {
+    id: string
+    name: string
+    email: string
+    emailVerified: boolean
+    image: string | null
+    createdAt: Date
+    updatedAt: Date
+  }
+}
+```
+
+## Organizations & Teams
+
+The organization plugin enables multi-tenancy:
+
+```typescript
+// Create organization
+const org = await authClient.organization.create({
+  name: "Acme Inc",
+  slug: "acme",
+})
+
+// Create team
+const team = await authClient.organization.createTeam({
+  organizationId: org.id,
+  name: "Engineering",
+})
+
+// Invite member
+const invitation = await authClient.organization.inviteMember({
+  organizationId: org.id,
+  email: "user@example.com",
+  role: "member",
+})
+
+// Add team member
+await authClient.organization.addTeamMember({
+  teamId: team.id,
+  userId: user.id,
+})
+```
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use environment variables for secrets">
+    Never hardcode client IDs or secrets:
+    
+    ```typescript
+    socialProviders: {
+      github: {
+        clientId: env.GITHUB_CLIENT_ID,
+        clientSecret: env.GITHUB_CLIENT_SECRET,
+      },
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Configure trusted origins">
+    Prevent CORS attacks by whitelisting origins:
+    
+    ```typescript
+    trustedOrigins: env.HONO_TRUSTED_ORIGINS, // ["https://app.zerostarter.dev"]
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate sessions on protected routes">
+    Always check authentication before accessing protected resources:
+    
+    ```typescript
+    const session = await auth.api.getSession()
+    if (!session) redirect("/")
+    ```
+  </Accordion>
+  
+  <Accordion title="Use httpOnly cookies">
+    Better Auth automatically sets httpOnly cookies to prevent XSS attacks.
+  </Accordion>
+</AccordionGroup>
+
+## Environment Variables
+
+Required environment variables:
+
+```bash title=".env"
+# Required
+BETTER_AUTH_SECRET=your-secret-key-here
+HONO_APP_URL=http://localhost:4000
+HONO_TRUSTED_ORIGINS=http://localhost:3000
+
+# GitHub OAuth (optional)
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+
+# Google OAuth (optional)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
+
+## API Reference
+
+Better Auth provides an interactive API reference at `/api/auth/reference` in development mode, documenting all available authentication endpoints.

@@ -1,0 +1,261 @@
+---
+title: Scripts
+description: Available npm scripts and their usage in the ZeroStarter monorepo
+---
+
+ZeroStarter uses Turborepo to manage scripts across the monorepo workspaces. All scripts are defined in the root `package.json` and can be run from the project root.
+
+## Development Scripts
+
+### `dev`
+
+```bash
+bun run dev
+```
+
+Starts all workspace applications in development mode with Turbo's interactive TUI (Terminal UI).
+
+**What it runs:**
+- `api/hono`: Starts the Hono API server with hot reload
+- `web/next`: Starts the Next.js development server
+
+**Turbo config:** Depends on `^build`, persistent task, cache disabled
+
+### `build`
+
+```bash
+bun run build
+```
+
+Builds all workspace applications for production with a summary of the build results.
+
+**What it builds:**
+- `api/hono`: Compiles TypeScript using tsdown
+- `web/next`: Creates optimized Next.js production build
+- Dependencies are built first (`^build`)
+
+**Outputs:** `.next/**`, `dist/**` (excluding `.next/cache/**`)
+
+### `start`
+
+```bash
+bun run start
+```
+
+Runs all workspace applications in production mode.
+
+**What it runs:**
+- `api/hono`: Executes the compiled `dist/index.mjs`
+- `web/next`: Runs Next.js production server
+
+**Turbo config:** Persistent task, cache disabled
+
+## Code Quality Scripts
+
+### `format`
+
+```bash
+bun run format
+```
+
+Formats all code using Oxfmt with the configuration from `.oxfmtrc.jsonc`.
+
+**Configuration:**
+- No semicolons (`semi: false`)
+- Experimental import sorting enabled
+- Experimental Tailwind CSS class sorting enabled
+- Ignores lock files
+
+### `format:check`
+
+```bash
+bun run format:check
+```
+
+Checks if code is formatted correctly without making changes. Useful in CI/CD pipelines.
+
+### `lint`
+
+```bash
+bun run lint
+```
+
+Runs Oxlint across all workspaces with a summary. Each workspace can define its own lint script.
+
+**Workspace lint scripts:**
+- `api/hono`: `tsc --noEmit` (type checking only)
+- `web/next`: `tsc --noEmit` (type checking only)
+
+### `check-types`
+
+```bash
+bun run check-types
+```
+
+Runs TypeScript type checking across all workspaces without emitting files.
+
+**Turbo config:** Depends on `^build` to ensure types from dependencies are available
+
+## Database Scripts
+
+All database scripts run from the `packages/db` workspace and require building the `@packages/env` package first.
+
+### `db:generate`
+
+```bash
+bun run db:generate
+```
+
+Generates Drizzle ORM migration files based on schema changes.
+
+**Prerequisites:** Builds `@packages/env` to load environment variables
+
+### `db:migrate`
+
+```bash
+bun run db:migrate
+```
+
+Applies pending database migrations to your PostgreSQL database.
+
+**Prerequisites:** Builds `@packages/env` and requires `POSTGRES_URL` to be set
+
+### `db:studio`
+
+```bash
+bun run db:studio
+```
+
+Launches Drizzle Studio, a visual database browser and editor.
+
+**Prerequisites:** Builds `@packages/env` and requires `POSTGRES_URL` to be set
+
+## Utility Scripts
+
+### `clean`
+
+```bash
+bun run clean
+```
+
+Removes all build artifacts and dependencies from the entire monorepo.
+
+**What it removes:**
+- All `.next` directories
+- All `.turbo` cache directories
+- All `dist` build output directories
+- All `node_modules` directories
+- Empty directories (using `delete-empty`)
+
+**Use case:** Clean slate when switching branches or troubleshooting dependency issues
+
+### `devtools`
+
+```bash
+bun run devtools
+```
+
+Launches Turborepo's devtools interface for monitoring and debugging the monorepo.
+
+### `shadcn:update`
+
+```bash
+bun run shadcn:update
+```
+
+Updates shadcn/ui components using the custom update script at `.github/scripts/shadcn-update.sh`.
+
+## Lifecycle Scripts
+
+### `postinstall`
+
+```bash
+# Runs automatically after `bun install`
+```
+
+Automatically runs the dependency manager script to maintain the package catalog.
+
+**What it does:**
+- Scans all workspace `package.json` files
+- Auto-moves dependencies with consistent versions to the root catalog
+- Sorts catalog entries alphabetically
+- Reports unused catalog entries
+- Reports dependencies with conflicting versions
+
+See `.github/scripts/deps-manager.ts` for implementation details.
+
+### `prepare`
+
+```bash
+# Runs automatically after `bun install`
+```
+
+Installs Lefthook git hooks for automated pre-commit and commit-msg validation.
+
+## Workspace-Specific Scripts
+
+Each workspace has its own set of scripts. Run them using Turbo's filter syntax:
+
+### Hono API (`api/hono`)
+
+```bash
+# Development with hot reload
+bun --filter=@api/hono dev
+
+# Build TypeScript
+bun --filter=@api/hono build
+
+# Type checking
+bun --filter=@api/hono check-types
+
+# Start production server
+bun --filter=@api/hono start
+```
+
+### Next.js Web (`web/next`)
+
+```bash
+# Development server
+bun --filter=@web/next dev
+
+# Build for production
+bun --filter=@web/next build
+
+# Type checking
+bun --filter=@web/next check-types
+
+# Start production server
+bun --filter=@web/next start
+```
+
+## Turbo Configuration
+
+The monorepo uses Turborepo with the following task configuration:
+
+```json
+{
+  "build": {
+    "dependsOn": ["^build"],
+    "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+  },
+  "check-types": {
+    "dependsOn": ["^build"]
+  },
+  "dev": {
+    "dependsOn": ["^build"],
+    "persistent": true,
+    "cache": false
+  },
+  "lint": {},
+  "start": {
+    "persistent": true,
+    "cache": false
+  }
+}
+```
+
+**Key concepts:**
+- `^build`: Build dependencies first (workspace dependencies)
+- `persistent`: Long-running tasks (servers, watchers)
+- `cache: false`: Don't cache output for these tasks
+- `outputs`: Files to include in the cache

@@ -1,0 +1,500 @@
+---
+title: Query Patterns
+description: Type-safe database queries with Drizzle ORM
+---
+
+ZeroStarter uses [Drizzle ORM](https://orm.drizzle.team/) for type-safe database operations with PostgreSQL. All queries benefit from full TypeScript inference.
+
+## Database Instance
+
+Import the database instance and schema from `@packages/db`:
+
+```typescript
+import { db, user, session, organization } from "@packages/db"
+```
+
+The `db` instance is a singleton that maintains connection pooling:
+
+```typescript packages/db/src/index.ts
+import { SQL } from "bun"
+import { drizzle } from "drizzle-orm/bun-sql"
+import * as schema from "@/schema"
+
+const client = new SQL(env.POSTGRES_URL, {
+  connectionTimeout: 10,
+  idleTimeout: 30,
+  maxLifetime: 0,
+})
+
+export const db = drizzle({ client, schema })
+```
+
+## Query Patterns
+
+### Select Queries
+
+#### Basic Select
+
+```typescript
+import { db, user } from "@packages/db"
+
+const allUsers = await db.select().from(user)
+```
+
+#### Select Specific Columns
+
+```typescript
+import { db, user } from "@packages/db"
+
+const userEmails = await db
+  .select({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+  })
+  .from(user)
+```
+
+#### Filter with Where
+
+```typescript
+import { db, user } from "@packages/db"
+import { eq } from "drizzle-orm"
+
+const specificUser = await db
+  .select()
+  .from(user)
+  .where(eq(user.email, "user@example.com"))
+```
+
+#### Multiple Conditions
+
+```typescript
+import { db, user } from "@packages/db"
+import { and, eq, gte } from "drizzle-orm"
+
+const verifiedRecentUsers = await db
+  .select()
+  .from(user)
+  .where(
+    and(
+      eq(user.emailVerified, true),
+      gte(user.createdAt, new Date("2024-01-01"))
+    )
+  )
+```
+
+### Insert Queries
+
+#### Insert Single Record
+
+```typescript
+import { db, user } from "@packages/db"
+
+const newUser = await db
+  .insert(user)
+  .values({
+    id: crypto.randomUUID(),
+    name: "John Doe",
+    email: "john@example.com",
+    emailVerified: false,
+  })
+  .returning()
+```
+
+#### Insert Multiple Records
+
+```typescript
+import { db, user } from "@packages/db"
+
+const newUsers = await db
+  .insert(user)
+  .values([
+    {
+      id: crypto.randomUUID(),
+      name: "Alice",
+      email: "alice@example.com",
+      emailVerified: false,
+    },
+    {
+      id: crypto.randomUUID(),
+      name: "Bob",
+      email: "bob@example.com",
+      emailVerified: true,
+    },
+  ])
+  .returning()
+```
+
+#### Insert with Conflict Handling
+
+```typescript
+import { db, user } from "@packages/db"
+
+const upsertedUser = await db
+  .insert(user)
+  .values({
+    id: "user-123",
+    name: "John Doe",
+    email: "john@example.com",
+    emailVerified: false,
+  })
+  .onConflictDoUpdate({
+    target: user.email,
+    set: {
+      name: "John Doe Updated",
+      updatedAt: new Date(),
+    },
+  })
+  .returning()
+```
+
+### Update Queries
+
+#### Update Records
+
+```typescript
+import { db, user } from "@packages/db"
+import { eq } from "drizzle-orm"
+
+const updatedUser = await db
+  .update(user)
+  .set({
+    emailVerified: true,
+    updatedAt: new Date(),
+  })
+  .where(eq(user.id, "user-123"))
+  .returning()
+```
+
+#### Conditional Update
+
+```typescript
+import { db, user } from "@packages/db"
+import { and, eq, isNull } from "drizzle-orm"
+
+const result = await db
+  .update(user)
+  .set({ image: "https://example.com/avatar.jpg" })
+  .where(
+    and(
+      eq(user.id, "user-123"),
+      isNull(user.image)
+    )
+  )
+  .returning()
+```
+
+### Delete Queries
+
+#### Delete Records
+
+```typescript
+import { db, session } from "@packages/db"
+import { lt } from "drizzle-orm"
+
+const deletedSessions = await db
+  .delete(session)
+  .where(lt(session.expiresAt, new Date()))
+  .returning()
+```
+
+#### Delete with Multiple Conditions
+
+```typescript
+import { db, invitation } from "@packages/db"
+import { and, eq, lt } from "drizzle-orm"
+
+const deletedInvitations = await db
+  .delete(invitation)
+  .where(
+    and(
+      eq(invitation.status, "pending"),
+      lt(invitation.expiresAt, new Date())
+    )
+  )
+  .returning()
+```
+
+## Relational Queries
+
+### Query with Relations
+
+Use Drizzle's query API for eager loading:
+
+```typescript
+import { db } from "@packages/db"
+
+const userWithSessions = await db.query.user.findFirst({
+  where: (user, { eq }) => eq(user.id, "user-123"),
+  with: {
+    sessions: true,
+    accounts: true,
+  },
+})
+```
+
+### Nested Relations
+
+```typescript
+import { db } from "@packages/db"
+
+const orgWithTeams = await db.query.organization.findFirst({
+  where: (org, { eq }) => eq(org.slug, "acme-corp"),
+  with: {
+    teams: {
+      with: {
+        teamMembers: {
+          with: {
+            user: true,
+          },
+        },
+      },
+    },
+    members: {
+      with: {
+        user: true,
+      },
+    },
+  },
+})
+```
+
+### Find Many with Relations
+
+```typescript
+import { db } from "@packages/db"
+
+const organizations = await db.query.organization.findMany({
+  with: {
+    members: {
+      with: {
+        user: true,
+      },
+    },
+  },
+})
+```
+
+## Advanced Patterns
+
+### Joins
+
+```typescript
+import { db, user, session } from "@packages/db"
+import { eq } from "drizzle-orm"
+
+const activeSessions = await db
+  .select({
+    sessionId: session.id,
+    sessionToken: session.token,
+    userId: user.id,
+    userName: user.name,
+    userEmail: user.email,
+  })
+  .from(session)
+  .innerJoin(user, eq(session.userId, user.id))
+  .where(eq(user.emailVerified, true))
+```
+
+### Aggregations
+
+```typescript
+import { db, member } from "@packages/db"
+import { count, eq } from "drizzle-orm"
+
+const memberCount = await db
+  .select({
+    organizationId: member.organizationId,
+    count: count(),
+  })
+  .from(member)
+  .where(eq(member.organizationId, "org-123"))
+  .groupBy(member.organizationId)
+```
+
+### Subqueries
+
+```typescript
+import { db, user, session } from "@packages/db"
+import { eq, inArray } from "drizzle-orm"
+
+const activeUserIds = db
+  .select({ userId: session.userId })
+  .from(session)
+  .where(eq(session.expiresAt, new Date()))
+
+const activeUsers = await db
+  .select()
+  .from(user)
+  .where(inArray(user.id, activeUserIds))
+```
+
+### Transactions
+
+```typescript
+import { db, user, organization, member } from "@packages/db"
+
+await db.transaction(async (tx) => {
+  const newUser = await tx
+    .insert(user)
+    .values({
+      id: crypto.randomUUID(),
+      name: "Jane Doe",
+      email: "jane@example.com",
+      emailVerified: false,
+    })
+    .returning()
+
+  const newOrg = await tx
+    .insert(organization)
+    .values({
+      id: crypto.randomUUID(),
+      name: "Jane's Org",
+      slug: "janes-org",
+      createdAt: new Date(),
+    })
+    .returning()
+
+  await tx.insert(member).values({
+    id: crypto.randomUUID(),
+    organizationId: newOrg[0].id,
+    userId: newUser[0].id,
+    role: "owner",
+    createdAt: new Date(),
+  })
+})
+```
+
+## Operators
+
+Drizzle provides comparison operators from `drizzle-orm`:
+
+### Equality
+
+```typescript
+import { eq, ne } from "drizzle-orm"
+
+eq(user.email, "john@example.com")  // email = 'john@example.com'
+ne(user.role, "admin")                // role != 'admin'
+```
+
+### Comparison
+
+```typescript
+import { gt, gte, lt, lte } from "drizzle-orm"
+
+gt(user.createdAt, new Date("2024-01-01"))  // created_at > '2024-01-01'
+lte(session.expiresAt, new Date())          // expires_at <= now()
+```
+
+### Logic
+
+```typescript
+import { and, or, not } from "drizzle-orm"
+
+and(eq(user.emailVerified, true), eq(user.role, "admin"))
+or(eq(user.role, "admin"), eq(user.role, "owner"))
+not(eq(user.emailVerified, false))
+```
+
+### Pattern Matching
+
+```typescript
+import { like, ilike } from "drizzle-orm"
+
+like(user.email, "%@example.com")   // email LIKE '%@example.com'
+ilike(user.name, "john%")            // name ILIKE 'john%' (case-insensitive)
+```
+
+### Null Checks
+
+```typescript
+import { isNull, isNotNull } from "drizzle-orm"
+
+isNull(user.image)      // image IS NULL
+isNotNull(user.image)   // image IS NOT NULL
+```
+
+### Array Operations
+
+```typescript
+import { inArray, notInArray } from "drizzle-orm"
+
+inArray(user.role, ["admin", "owner"])    // role IN ('admin', 'owner')
+notInArray(user.id, excludedIds)          // id NOT IN (...)
+```
+
+## Type Safety
+
+All queries are fully typed:
+
+```typescript
+import { db, user } from "@packages/db"
+
+const result = await db
+  .select({
+    id: user.id,
+    email: user.email,
+  })
+  .from(user)
+
+result[0].id     // ✓ string
+result[0].email  // ✓ string
+result[0].name   // ✗ Type error: Property 'name' does not exist
+```
+
+## Better Auth Integration
+
+The database is primarily accessed through [Better Auth](https://better-auth.com/), which handles all authentication queries:
+
+```typescript packages/auth/src/index.ts
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: {
+      account,
+      invitation,
+      member,
+      organization,
+      session,
+      team,
+      teamMember,
+      user,
+      verification,
+    },
+  }),
+})
+```
+
+Better Auth manages user sessions, OAuth accounts, and organization membership internally, so you typically won't need to write manual queries for these tables.
+
+## Best Practices
+
+1. **Always use parameterized queries** - Drizzle handles this automatically
+2. **Use returning()** to get inserted/updated data in a single query
+3. **Leverage TypeScript inference** - Let the types guide your queries
+4. **Use transactions** for operations that must succeed or fail together
+5. **Prefer relational queries** over manual joins when possible
+6. **Index foreign keys** - Already done in the schema definitions
+7. **Use prepared statements** for frequently executed queries
+
+## Prepared Statements
+
+For repeated queries, prepare them for better performance:
+
+```typescript
+import { db, user } from "@packages/db"
+import { eq } from "drizzle-orm"
+
+const getUserByEmail = db
+  .select()
+  .from(user)
+  .where(eq(user.email, sql.placeholder("email")))
+  .prepare("get_user_by_email")
+
+const user1 = await getUserByEmail.execute({ email: "alice@example.com" })
+const user2 = await getUserByEmail.execute({ email: "bob@example.com" })
+```

@@ -1,0 +1,621 @@
+---
+title: "Troubleshooting"
+description: "Common issues and solutions for ZeroStarter"
+icon: "wrench"
+---
+
+## Installation Issues
+
+### Dependencies fail to install
+
+<Warning>
+  If `bun install` fails, this is usually due to postinstall scripts or cache issues.
+</Warning>
+
+**Solution 1: Skip postinstall scripts**
+
+```bash
+bun install --ignore-scripts
+```
+
+This bypasses the postinstall hooks that might be causing issues.
+
+**Solution 2: Clear cache and reinstall**
+
+```bash
+rm -rf node_modules
+rm bun.lockb
+bun install
+```
+
+**Solution 3: Update Bun**
+
+Ensure you're using Bun v1.3.0 or later:
+
+```bash
+bun --version
+bun upgrade
+```
+
+<Note>
+  After upgrading Bun, restart your terminal to ensure the new version is active.
+</Note>
+
+### Module resolution errors
+
+If you see errors about missing modules or path aliases not working:
+
+**Check TypeScript configuration**
+
+```bash
+bun run check-types
+```
+
+**Rebuild all packages**
+
+```bash
+bun run build
+```
+
+**Restart your IDE**
+
+Sometimes TypeScript server needs a restart to pick up changes in monorepo packages.
+
+---
+
+## Database Issues
+
+### Cannot connect to PostgreSQL
+
+<Warning>
+  Database connection errors are often due to incorrect `POSTGRES_URL` configuration.
+</Warning>
+
+**Check your connection string format**
+
+```bash
+postgresql://username:password@host:port/database
+```
+
+**Common issues:**
+
+1. **Missing SSL mode**: Some providers require SSL
+   ```bash
+   POSTGRES_URL="postgresql://user:pass@host:5432/db?sslmode=require"
+   ```
+
+2. **Wrong port**: Default is 5432, but some providers use different ports
+
+3. **Firewall blocking**: Ensure your IP is whitelisted (especially with cloud providers)
+
+4. **Database doesn't exist**: Create the database first
+   ```bash
+   psql -U postgres -c "CREATE DATABASE your_database;"
+   ```
+
+**Test your connection**
+
+Try opening Drizzle Studio to verify the connection:
+
+```bash
+bun run db:studio
+```
+
+If this works, your connection string is correct.
+
+### Migration errors
+
+**Problem: Migrations fail to apply**
+
+```bash
+Error: relation "users" already exists
+```
+
+**Solution:**
+
+1. Check if migrations were already applied:
+   ```bash
+   bun run db:studio
+   ```
+
+2. If tables exist, you may need to reset (⚠️ destroys data):
+   ```bash
+   # Connect to your database
+   psql $POSTGRES_URL
+   
+   # Drop all tables
+   DROP SCHEMA public CASCADE;
+   CREATE SCHEMA public;
+   
+   # Re-run migrations
+   bun run db:migrate
+   ```
+
+3. For production, create a new migration:
+   ```bash
+   bun run db:generate
+   ```
+
+<Warning>
+  Never drop tables in production without backing up data first.
+</Warning>
+
+**Problem: Drizzle Kit fails to generate migrations**
+
+```bash
+Error: Cannot find module '@packages/env'
+```
+
+**Solution:**
+
+Build the env package first:
+
+```bash
+turbo run build --filter=@packages/env
+bun run db:generate
+```
+
+### Database connection pool exhausted
+
+<Warning>
+  This occurs when you have too many open connections to the database.
+</Warning>
+
+**Solution:**
+
+1. **Restart your development server**
+   ```bash
+   # Stop the server (Ctrl+C)
+   bun dev
+   ```
+
+2. **Check connection limits** in your PostgreSQL provider settings
+
+3. **Reduce connection pool size** in `packages/db/src/index.ts` if needed
+
+---
+
+## Development Server Issues
+
+### Port already in use
+
+```bash
+Error: listen EADDRINUSE: address already in use :::3000
+```
+
+**Solution 1: Kill the process using the port**
+
+For frontend (port 3000):
+```bash
+lsof -ti:3000 | xargs kill -9
+```
+
+For backend (port 4000):
+```bash
+lsof -ti:4000 | xargs kill -9
+```
+
+**Solution 2: Change the port**
+
+In `web/next/package.json`:
+```json
+{
+  "scripts": {
+    "dev": "next dev -p 3001"
+  }
+}
+```
+
+In `api/hono/src/index.ts`, update the port configuration.
+
+### Hot reload not working
+
+<Note>
+  Sometimes file watching doesn't work properly, especially on Linux or in Docker.
+</Note>
+
+**Solution 1: Check file watcher limits (Linux)**
+
+```bash
+# Check current limit
+cat /proc/sys/fs/inotify/max_user_watches
+
+# Increase limit
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```
+
+**Solution 2: Restart development server**
+
+```bash
+# Stop server (Ctrl+C)
+bun dev
+```
+
+**Solution 3: Clear Next.js cache**
+
+```bash
+rm -rf web/next/.next
+bun dev
+```
+
+### Turborepo cache issues
+
+If changes aren't reflected or builds are stale:
+
+```bash
+# Clear Turbo cache
+rm -rf .turbo
+rm -rf node_modules/.cache
+
+# Clean all build artifacts
+bun run clean
+
+# Reinstall and rebuild
+bun install
+bun run build
+```
+
+---
+
+## Type Safety Issues
+
+### Frontend doesn't recognize API types
+
+<Warning>
+  This usually means the backend `AppType` isn't being exported or the backend needs to be built.
+</Warning>
+
+**Solution 1: Build the backend**
+
+```bash
+turbo run build --filter=@api/hono
+```
+
+**Solution 2: Verify AppType export**
+
+Check `api/hono/src/index.ts`:
+
+```typescript
+// Make sure this is exported
+export type AppType = typeof app
+```
+
+**Solution 3: Restart TypeScript server**
+
+In VS Code: `Cmd/Ctrl + Shift + P` → "TypeScript: Restart TS Server"
+
+**Solution 4: Check the client import**
+
+In `web/next/src/lib/api/client.ts`:
+
+```typescript
+import type { AppType } from '@api/hono'
+```
+
+Ensure the import path is correct and the package is in workspace dependencies.
+
+### Zod validation errors
+
+```bash
+ZodError: Invalid input
+```
+
+**Debug validation errors:**
+
+```typescript
+try {
+  const data = schema.parse(input)
+} catch (error) {
+  if (error instanceof z.ZodError) {
+    console.log(JSON.stringify(error.errors, null, 2))
+  }
+}
+```
+
+**Common issues:**
+
+1. **Required fields missing**: Check all required fields are provided
+2. **Type mismatch**: Ensure data types match schema (string vs number)
+3. **Date formats**: Use ISO strings for dates
+4. **Nested objects**: Validate nested structure matches schema
+
+---
+
+## Authentication Issues
+
+### OAuth callback errors
+
+**Problem: "Redirect URI mismatch"**
+
+<Warning>
+  The callback URL in your OAuth app must exactly match the one in Better Auth.
+</Warning>
+
+**For GitHub:**
+- Callback URL: `http://localhost:4000/api/auth/callback/github`
+- For production: `https://your-api-domain.com/api/auth/callback/github`
+
+**For Google:**
+- Callback URL: `http://localhost:4000/api/auth/callback/google`
+- For production: `https://your-api-domain.com/api/auth/callback/google`
+
+**Check your `.env` file:**
+
+```bash
+HONO_APP_URL=http://localhost:4000  # Must match OAuth app settings
+```
+
+### Session not persisting
+
+**Problem: User gets logged out on page refresh**
+
+**Solution 1: Check BETTER_AUTH_SECRET**
+
+```bash
+# Generate a new secret if needed
+openssl rand -base64 32
+```
+
+Add to `.env`:
+```bash
+BETTER_AUTH_SECRET=your-generated-secret
+```
+
+**Solution 2: Check cookie settings**
+
+Ensure `HONO_TRUSTED_ORIGINS` includes your frontend URL:
+
+```bash
+HONO_TRUSTED_ORIGINS=http://localhost:3000
+```
+
+**Solution 3: Clear browser cookies**
+
+Sometimes old cookies cause issues. Clear cookies and try again.
+
+### CORS errors during authentication
+
+```bash
+Access to fetch at 'http://localhost:4000/api/auth/signin' has been blocked by CORS policy
+```
+
+**Solution:**
+
+Ensure `HONO_TRUSTED_ORIGINS` is set correctly in `.env`:
+
+```bash
+HONO_TRUSTED_ORIGINS=http://localhost:3000,http://localhost:3001
+```
+
+For production, add your production domain:
+
+```bash
+HONO_TRUSTED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+```
+
+---
+
+## Build & Deployment Issues
+
+### Build fails with type errors
+
+```bash
+bun run build
+# Error: Type 'X' is not assignable to type 'Y'
+```
+
+**Solution:**
+
+1. **Check types locally first:**
+   ```bash
+   bun run check-types
+   ```
+
+2. **Build packages in order:**
+   ```bash
+   turbo run build --filter=@packages/env
+   turbo run build --filter=@packages/db
+   turbo run build --filter=@packages/auth
+   turbo run build
+   ```
+
+3. **Clear build cache:**
+   ```bash
+   bun run clean
+   bun run build
+   ```
+
+### Vercel deployment fails
+
+**Problem: Build succeeds locally but fails on Vercel**
+
+<Note>
+  Ensure all environment variables are set in Vercel dashboard.
+</Note>
+
+**Checklist:**
+
+1. ✅ All `.env` variables added to Vercel
+2. ✅ Build command is correct: `bun run build`
+3. ✅ Output directory is correct: `web/next/.next` (for Next.js)
+4. ✅ Node version matches (use `engines` in `package.json`)
+5. ✅ Database is accessible from Vercel (check IP whitelist)
+
+**Common Vercel issues:**
+
+- **Missing build command**: Set to `cd ../.. && bun install && bun run build`
+- **Wrong root directory**: Set to `web/next` for frontend, `api/hono` for backend
+- **Environment variables**: Must be set for each deployment (preview and production)
+
+### Docker build fails
+
+**Problem: Docker image won't build**
+
+```bash
+docker compose up
+# Error: Cannot find module...
+```
+
+**Solution:**
+
+1. **Rebuild without cache:**
+   ```bash
+   docker compose build --no-cache
+   docker compose up
+   ```
+
+2. **Check .dockerignore:**
+   Ensure `node_modules` and build artifacts are ignored
+
+3. **Verify Docker Compose version:**
+   ```bash
+   docker compose version
+   # Should be v2.x or higher
+   ```
+
+---
+
+## Performance Issues
+
+### Slow initial load
+
+<Note>
+  First load in development is always slower due to compilation. Production builds are optimized.
+</Note>
+
+**For development:**
+
+1. **Enable Turbopack (experimental):**
+   In `web/next/package.json`:
+   ```json
+   {
+     "scripts": {
+       "dev": "next dev --turbo"
+     }
+   }
+   ```
+
+2. **Reduce hot reload scope:**
+   Only run the package you're working on:
+   ```bash
+   bun --cwd web/next dev
+   ```
+
+**For production:**
+
+Build and test production bundle:
+```bash
+bun run build
+bun run start
+```
+
+Production builds are significantly faster.
+
+### High memory usage
+
+**During development:**
+
+This is normal with Turborepo running multiple packages. You can:
+
+1. **Run individual packages:**
+   ```bash
+   # Only frontend
+   bun --cwd web/next dev
+   
+   # Only backend
+   bun --cwd api/hono dev
+   ```
+
+2. **Increase Node memory limit:**
+   ```bash
+   NODE_OPTIONS="--max-old-space-size=4096" bun dev
+   ```
+
+**During build:**
+
+If builds run out of memory:
+
+```bash
+NODE_OPTIONS="--max-old-space-size=4096" bun run build
+```
+
+---
+
+## IDE & Editor Issues
+
+### VS Code doesn't recognize path aliases
+
+**Problem: Imports using `@/` or `@packages/` show errors**
+
+**Solution:**
+
+1. **Ensure TypeScript is using workspace version:**
+   - Open any `.ts` file
+   - Click TypeScript version in status bar
+   - Select "Use Workspace Version"
+
+2. **Restart TS Server:**
+   `Cmd/Ctrl + Shift + P` → "TypeScript: Restart TS Server"
+
+3. **Check tsconfig.json paths:**
+   ```json
+   {
+     "compilerOptions": {
+       "paths": {
+         "@/*": ["./src/*"],
+         "@packages/*": ["../../packages/*"]
+       }
+     }
+   }
+   ```
+
+### ESLint/Oxlint errors
+
+**Problem: Linting fails or shows incorrect errors**
+
+**Solution:**
+
+1. **Run linter:**
+   ```bash
+   bun run lint
+   ```
+
+2. **Fix auto-fixable issues:**
+   ```bash
+   bun run format
+   ```
+
+3. **Check Oxlint config:**
+   Configuration is in `oxlint.json` at the root
+
+---
+
+## Still Having Issues?
+
+<CardGroup cols={2}>
+  <Card title="Check FAQ" icon="circle-question" href="/resources/faq">
+    Review frequently asked questions for quick answers.
+  </Card>
+  
+  <Card title="Open an Issue" icon="github" href="https://github.com/nrjdalal/zerostarter/issues">
+    Report bugs or ask for help on GitHub.
+  </Card>
+  
+  <Card title="Review Documentation" icon="book" href="/">
+    Check the full documentation for detailed guides.
+  </Card>
+  
+  <Card title="Follow Updates" icon="twitter" href="https://twitter.com/nrjdalal">
+    Follow @nrjdalal on X for updates and tips.
+  </Card>
+</CardGroup>
+
+<Tip>
+  When reporting issues, include:
+  - Your operating system
+  - Bun version (`bun --version`)
+  - Node version (`node --version`)
+  - Error messages (full stack trace)
+  - Steps to reproduce
+</Tip>

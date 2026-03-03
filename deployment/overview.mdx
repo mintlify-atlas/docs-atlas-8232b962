@@ -1,0 +1,143 @@
+---
+title: Deployment Overview
+description: Learn about the deployment options available for ZeroStarter applications
+---
+
+ZeroStarter supports multiple deployment strategies to fit your infrastructure needs. Choose the deployment method that best matches your requirements.
+
+## Deployment Options
+
+<CardGroup cols={2}>
+  <Card title="Vercel" icon="triangle" href="/deployment/vercel">
+    Deploy to Vercel with zero configuration for both Next.js and Hono API
+  </Card>
+  <Card title="Docker" icon="docker" href="/deployment/docker">
+    Containerized deployment with Docker and Docker Compose
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+ZeroStarter is built as a monorepo with two main services:
+
+- **Next.js Frontend** (`web/next`) - React application running on port 3000
+- **Hono API Backend** (`api/hono`) - API server running on port 4000
+
+Both services share common packages:
+
+- `@packages/auth` - Authentication logic using Better Auth
+- `@packages/db` - Database schema and queries using Drizzle ORM
+- `@packages/env` - Environment variable validation
+
+## Build System
+
+The project uses Turborepo for efficient builds:
+
+```json
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    }
+  }
+}
+```
+
+### Build Commands
+
+<CodeGroup>
+```bash Build All Services
+turbo build
+```
+
+```bash Build API Only
+turbo build --filter=@api/hono
+```
+
+```bash Build Web Only
+turbo build --filter=@web/next
+```
+</CodeGroup>
+
+## Environment Variables
+
+Both deployment methods require proper environment configuration. See the [Production Checklist](/deployment/production-checklist) for detailed environment setup.
+
+### Required Variables
+
+<AccordionGroup>
+  <Accordion title="Server Variables">
+    - `NODE_ENV` - Set to `production`
+    - `BETTER_AUTH_SECRET` - Generate using `openssl rand -base64 32`
+    - `POSTGRES_URL` - PostgreSQL connection string
+    - `HONO_APP_URL` - Your API URL
+    - `HONO_TRUSTED_ORIGINS` - Comma-separated list of allowed origins
+  </Accordion>
+
+  <Accordion title="Client Variables">
+    - `NEXT_PUBLIC_APP_URL` - Your application URL
+    - `NEXT_PUBLIC_API_URL` - Your API URL
+  </Accordion>
+
+  <Accordion title="OAuth Providers (Optional)">
+    - `GITHUB_CLIENT_ID` - GitHub OAuth app ID
+    - `GITHUB_CLIENT_SECRET` - GitHub OAuth secret
+    - `GOOGLE_CLIENT_ID` - Google OAuth client ID
+    - `GOOGLE_CLIENT_SECRET` - Google OAuth secret
+  </Accordion>
+</AccordionGroup>
+
+## Database Setup
+
+Before deploying, ensure your database is set up:
+
+<Steps>
+  <Step title="Generate migrations">
+    ```bash
+    bun run db:generate
+    ```
+  </Step>
+  <Step title="Run migrations">
+    ```bash
+    bun run db:migrate
+    ```
+  </Step>
+  <Step title="Verify with Drizzle Studio">
+    ```bash
+    bun run db:studio
+    ```
+  </Step>
+</Steps>
+
+## Choosing a Deployment Method
+
+### Use Vercel if you want:
+
+- Fastest time to deployment
+- Automatic preview deployments for PRs
+- Built-in CI/CD
+- Serverless architecture
+- Easy scaling without infrastructure management
+
+### Use Docker if you want:
+
+- Full control over infrastructure
+- Self-hosted deployment
+- Consistent environments across dev/staging/production
+- Traditional server-based architecture
+- Custom networking and security configurations
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Vercel Deployment" icon="triangle" href="/deployment/vercel">
+    Step-by-step guide for deploying to Vercel
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Containerized deployment guide
+  </Card>
+  <Card title="Production Checklist" icon="clipboard-check" href="/deployment/production-checklist">
+    Essential production readiness checklist
+  </Card>
+</CardGroup>

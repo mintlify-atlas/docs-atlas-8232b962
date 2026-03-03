@@ -1,0 +1,508 @@
+---
+title: Code Quality
+description: Linting, formatting, and code quality tools in ZeroStarter
+---
+
+ZeroStarter uses modern, fast code quality tools to maintain consistent code style and catch errors early.
+
+## Overview
+
+- **Oxlint** - Fast linter written in Rust
+- **Oxfmt** - Fast formatter written in Rust (based on Prettier)
+- **Lefthook** - Fast git hooks manager written in Go
+- **lint-staged** - Run linters on staged files only
+- **Commitlint** - Validate commit messages
+- **TypeScript** - Type checking
+
+## Oxfmt (Formatter)
+
+Oxfmt is a high-performance code formatter that's 10-100x faster than Prettier while maintaining compatibility with Prettier's output.
+
+### Configuration
+
+Configuration is defined in `.oxfmtrc.jsonc`:
+
+```jsonc
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "experimentalSortImports": {},
+  "experimentalTailwindcss": {},
+  "ignorePatterns": ["**/*.lock"]
+}
+```
+
+**Settings:**
+- **No semicolons** - Cleaner code style
+- **Auto-sort imports** - Keeps imports organized alphabetically
+- **Sort Tailwind classes** - Consistent class ordering
+- **Ignores lock files** - `package-lock.json`, `bun.lockb`, etc.
+
+### Usage
+
+#### Format all files
+
+```bash
+bun run format
+```
+
+Formats all files in the monorepo.
+
+#### Check formatting
+
+```bash
+bun run format:check
+```
+
+Checks if files are formatted correctly without modifying them. Useful in CI/CD.
+
+**Exit codes:**
+- `0` - All files are formatted correctly
+- `1` - Some files need formatting
+
+#### Format specific files
+
+```bash
+oxfmt path/to/file.ts
+oxfmt "src/**/*.{ts,tsx}"
+```
+
+### Supported File Types
+
+Oxfmt formats:
+- JavaScript (`.js`, `.mjs`, `.cjs`)
+- TypeScript (`.ts`, `.tsx`, `.mts`, `.cts`)
+- JSON (`.json`, `.jsonc`)
+- JSX/TSX
+- Markdown (`.md`, `.mdx`)
+
+## Oxlint (Linter)
+
+Oxlint is a fast linter written in Rust that catches common errors and enforces best practices.
+
+### Configuration
+
+Oxlint uses sensible defaults without requiring configuration. No `.oxlintrc.json` file is needed.
+
+**Default rules:**
+- ESLint recommended rules
+- TypeScript recommended rules
+- React recommended rules
+- Security rules
+- Performance rules
+
+### Usage
+
+#### Lint all files
+
+```bash
+bun run lint
+```
+
+Runs lint across all workspaces via Turborepo.
+
+#### Lint specific files
+
+```bash
+oxlint path/to/file.ts
+oxlint "src/**/*.{ts,tsx}"
+```
+
+#### Auto-fix issues
+
+```bash
+oxlint --fix
+```
+
+Automatically fixes issues that can be safely corrected.
+
+### Oxlint vs ESLint
+
+**Why Oxlint?**
+- 50-100x faster than ESLint
+- Written in Rust for maximum performance
+- Drop-in replacement for most ESLint rules
+- No configuration needed
+- Integrates seamlessly with existing tools
+
+**Trade-offs:**
+- Fewer total rules than ESLint (focuses on most important ones)
+- Some ESLint plugins not yet supported
+- Newer tool with smaller ecosystem
+
+## Lefthook (Git Hooks)
+
+Lefthook manages git hooks with better performance than Husky. It runs linters and checks before commits.
+
+### Configuration
+
+Configuration is defined in `lefthook.yml`:
+
+```yaml
+pre-commit:
+  piped: true
+  commands:
+    audit:
+      run: bun audit --audit-level high
+      use_stdin: true
+      only:
+        - ref: canary
+    lint-staged:
+      run: bunx lint-staged --verbose
+      stage_fixed: true
+    build:
+      run: bun run build
+      interactive: true
+
+commit-msg:
+  commands:
+    commitlint:
+      run: bunx commitlint --edit {1}
+```
+
+### Pre-commit Hooks
+
+Run automatically before every commit:
+
+#### 1. Security Audit (canary branch only)
+
+```bash
+bun audit --audit-level high
+```
+
+**What it does:**
+- Checks for high-severity security vulnerabilities in dependencies
+- Only runs on the `canary` branch
+- Prevents commits if vulnerabilities are found
+
+#### 2. Lint Staged Files
+
+```bash
+bunx lint-staged --verbose
+```
+
+**What it does:**
+- Runs linters only on staged files (fast!)
+- Auto-stages fixed files
+- Configured in `.lintstagedrc.json`
+
+#### 3. Build Check
+
+```bash
+bun run build
+```
+
+**What it does:**
+- Runs a full production build
+- Ensures code compiles successfully
+- Catches TypeScript errors and build issues
+- Interactive mode shows full output
+
+**Note:** This can be slow. Consider commenting it out for faster commits during development:
+
+```yaml
+pre-commit:
+  commands:
+    # build:
+    #   run: bun run build
+    #   interactive: true
+```
+
+### Commit Message Validation
+
+Runs automatically when writing commit messages:
+
+```bash
+bunx commitlint --edit {1}
+```
+
+**What it does:**
+- Validates commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
+- Configured in `package.json` under `commitlint`
+
+### Installation
+
+Lefthook hooks are installed automatically after `bun install` via the `prepare` script:
+
+```bash
+bunx lefthook install
+```
+
+### Skipping Hooks
+
+#### Skip all hooks
+
+```bash
+git commit --no-verify -m "message"
+```
+
+#### Skip specific hooks
+
+```bash
+LEFTHOOK_EXCLUDE=build git commit -m "message"
+```
+
+**Use sparingly!** Hooks exist to catch issues before they reach the repository.
+
+## lint-staged
+
+lint-staged runs linters only on files staged for commit, making pre-commit hooks much faster.
+
+### Configuration
+
+Configuration is defined in `.lintstagedrc.json`:
+
+```json
+{
+  "*": ["oxfmt --no-error-on-unmatched-pattern", "oxlint"],
+  "package.json": ["bun .github/scripts/deps-manager.ts"]
+}
+```
+
+### Rules
+
+#### All files
+
+```json
+"*": ["oxfmt --no-error-on-unmatched-pattern", "oxlint"]
+```
+
+**Runs:**
+1. **Oxfmt** - Auto-formats the file
+2. **Oxlint** - Checks for issues
+
+**Flags:**
+- `--no-error-on-unmatched-pattern` - Don't fail if Oxfmt can't format certain files (e.g., images, lock files)
+
+#### package.json files
+
+```json
+"package.json": ["bun .github/scripts/deps-manager.ts"]
+```
+
+**Runs:** Dependency manager script
+
+**What it does:**
+- Scans all workspace `package.json` files
+- Auto-moves dependencies to the root catalog if versions match
+- Sorts catalog entries
+- Reports unused or conflicting dependencies
+
+### How It Works
+
+1. You stage files: `git add .`
+2. You commit: `git commit -m "message"`
+3. lint-staged runs:
+   - Formats staged files with Oxfmt
+   - Lints staged files with Oxlint
+   - Runs deps-manager if `package.json` was modified
+4. If linters find issues:
+   - Auto-fixable issues are fixed and staged
+   - Manual fixes required: commit is aborted
+5. Commit proceeds if all checks pass
+
+### Benefits
+
+- **Fast** - Only processes staged files, not entire codebase
+- **Automatic fixes** - Auto-formats and auto-fixes when possible
+- **Catches issues early** - Before they reach CI/CD
+- **Consistent code** - Everyone commits properly formatted code
+
+## Commitlint
+
+Commitlint validates commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+
+### Configuration
+
+Configuration is defined in `package.json`:
+
+```json
+{
+  "commitlint": {
+    "extends": ["@commitlint/config-conventional"]
+  }
+}
+```
+
+### Commit Message Format
+
+```
+type(scope): subject
+
+body
+
+footer
+```
+
+**Example:**
+```
+feat(auth): add Google OAuth support
+
+Implements Google OAuth 2.0 authentication flow using Better Auth.
+Adds GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.
+
+Closes #123
+```
+
+### Types
+
+- `feat` - New feature
+- `fix` - Bug fix
+- `docs` - Documentation changes
+- `style` - Code style changes (formatting, missing semicolons, etc.)
+- `refactor` - Code refactoring (no feature changes or bug fixes)
+- `perf` - Performance improvements
+- `test` - Adding or updating tests
+- `build` - Build system changes (dependencies, scripts, etc.)
+- `ci` - CI/CD changes
+- `chore` - Other changes that don't modify src or test files
+- `revert` - Revert a previous commit
+
+### Rules
+
+1. **Type is required** - Must be one of the allowed types
+2. **Subject is required** - Brief description of the change
+3. **Subject is lowercase** - No capital letters at the start
+4. **No period at end** - Subject should not end with `.`
+5. **Blank line before body** - If body is present
+6. **Max line length** - 100 characters for header, 72 for body
+
+### Examples
+
+#### Good commits
+
+```bash
+git commit -m "feat: add user authentication"
+git commit -m "fix(api): correct rate limit calculation"
+git commit -m "docs: update environment variables guide"
+git commit -m "refactor(db): simplify user query logic"
+```
+
+#### Bad commits
+
+```bash
+# Missing type
+git commit -m "add user authentication"
+
+# Capital letter in subject
+git commit -m "feat: Add user authentication"
+
+# Period at end
+git commit -m "feat: add user authentication."
+
+# Invalid type
+git commit -m "added: user authentication"
+```
+
+## Type Checking
+
+TypeScript provides static type checking across the monorepo.
+
+### Run type checking
+
+```bash
+bun run check-types
+```
+
+Runs `tsc --noEmit` across all workspaces to check for type errors without generating output files.
+
+### Workspace-specific type checking
+
+```bash
+# API
+bun --filter=@api/hono check-types
+
+# Web
+bun --filter=@web/next check-types
+```
+
+### Benefits
+
+- Catches type errors at build time
+- Enables IDE autocomplete and IntelliSense
+- Safer refactoring
+- Self-documenting code
+
+## CI/CD Integration
+
+Run these commands in your CI/CD pipeline:
+
+```bash
+# Install dependencies
+bun install
+
+# Check formatting
+bun run format:check
+
+# Run linter
+bun run lint
+
+# Type checking
+bun run check-types
+
+# Build
+bun run build
+```
+
+**GitHub Actions example:**
+```yaml
+- name: Code Quality
+  run: |
+    bun run format:check
+    bun run lint
+    bun run check-types
+    bun run build
+```
+
+## Editor Integration
+
+### VS Code
+
+Install recommended extensions:
+
+1. **Oxfmt** - Format on save
+2. **Oxlint** - Inline linting errors
+3. **TypeScript and JavaScript Language Features** - Built-in type checking
+
+**Settings:**
+```json
+{
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxlint": "explicit"
+  }
+}
+```
+
+### Cursor / Other IDEs
+
+Most modern IDEs support Oxfmt and Oxlint through their extension marketplaces. Search for "Oxc" or "Oxlint".
+
+## Troubleshooting
+
+### "Lefthook: command not found"
+
+Reinstall hooks:
+```bash
+bunx lefthook install
+```
+
+### Pre-commit hooks not running
+
+1. Check hooks are installed: `ls .git/hooks/`
+2. Reinstall: `bunx lefthook install`
+3. Verify Lefthook config: `cat lefthook.yml`
+
+### Commitlint failing on valid messages
+
+1. Check message format matches conventional commits
+2. Ensure subject is lowercase
+3. Remove period at end of subject
+4. Verify type is valid
+
+### Oxlint/Oxfmt errors
+
+1. Update to latest version: `bun update oxlint oxfmt`
+2. Clear cache: `rm -rf .turbo node_modules/.cache`
+3. Check file syntax is valid TypeScript/JavaScript

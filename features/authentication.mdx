@@ -1,0 +1,213 @@
+---
+title: Authentication
+description: Better Auth integration with OAuth providers and session management
+---
+
+## Overview
+
+ZeroStarter uses [Better Auth](https://www.better-auth.com/) for authentication, providing a type-safe, modern authentication solution with built-in support for OAuth providers, session management, and organization/team features.
+
+## Features
+
+- **OAuth Providers**: GitHub and Google authentication out of the box
+- **Session Management**: Secure session handling with Drizzle ORM
+- **Organization Support**: Multi-tenant organizations and teams via Better Auth plugins
+- **Type Safety**: Full TypeScript support with inferred types
+- **Cross-Subdomain Cookies**: Smart cookie configuration for multi-environment deployments
+- **OpenAPI Integration**: Auto-generated API documentation for auth endpoints
+
+## Configuration
+
+The authentication system is configured in `packages/auth/src/index.ts`:
+
+```ts packages/auth/src/index.ts
+import { betterAuth } from "better-auth"
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { openAPI, organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  baseURL: env.HONO_APP_URL,
+  trustedOrigins: env.HONO_TRUSTED_ORIGINS,
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: {
+      account,
+      invitation,
+      member,
+      organization,
+      session,
+      team,
+      teamMember,
+      user,
+      verification,
+    },
+  }),
+  plugins: [
+    openAPIPlugin(),
+    organizationPlugin({
+      teams: { enabled: true },
+    }),
+  ],
+  socialProviders: {
+    github: {
+      clientId: env.GITHUB_CLIENT_ID,
+      clientSecret: env.GITHUB_CLIENT_SECRET,
+    },
+    google: {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    },
+  },
+})
+```
+
+## Environment Variables
+
+Add these variables to your `.env` file:
+
+```bash
+# API Configuration
+HONO_APP_URL=http://localhost:4000
+HONO_TRUSTED_ORIGINS=http://localhost:3000,http://localhost:4000
+
+# GitHub OAuth
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+```
+
+## OAuth Provider Setup
+
+<Steps>
+  <Step title="GitHub OAuth">
+    1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+    2. Create a new OAuth App
+    3. Set **Authorization callback URL** to `http://localhost:4000/api/auth/callback/github`
+    4. Copy the Client ID and generate a Client Secret
+    5. Add to your `.env` file
+  </Step>
+
+  <Step title="Google OAuth">
+    1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+    2. Create a new project or select an existing one
+    3. Enable the Google+ API
+    4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
+    5. Set **Authorized redirect URIs** to `http://localhost:4000/api/auth/callback/google`
+    6. Copy the Client ID and Client Secret
+    7. Add to your `.env` file
+  </Step>
+</Steps>
+
+## Session Management
+
+Better Auth handles sessions automatically with the Drizzle adapter. Sessions are stored in PostgreSQL and include:
+
+- User ID and session token
+- IP address and user agent tracking
+- Automatic expiration handling
+- Secure cookie-based authentication
+
+### Type-Safe Session Access
+
+```ts
+import type { Session } from "@packages/auth"
+
+// The session type is automatically inferred
+export type Session = typeof auth.$Infer.Session
+```
+
+## Cross-Subdomain Cookie Configuration
+
+ZeroStarter includes smart cookie configuration for multi-environment deployments. This allows sessions to work across subdomains (e.g., `app.example.com` and `api.example.com`).
+
+### Cookie Domain
+
+The `getCookieDomain` utility extracts the root domain:
+
+```ts
+getCookieDomain("https://api.zerostarter.dev")          // ".zerostarter.dev"
+getCookieDomain("https://api.canary.zerostarter.dev")   // ".canary.zerostarter.dev"
+getCookieDomain("http://localhost:4000")                // undefined
+```
+
+### Cookie Prefix
+
+The `getCookiePrefix` utility isolates cookies per environment:
+
+```ts
+getCookiePrefix("https://api.zerostarter.dev")          // undefined (production)
+getCookiePrefix("https://api.canary.zerostarter.dev")   // "canary"
+getCookiePrefix("https://api.dev.zerostarter.dev")      // "dev"
+```
+
+## API Routes
+
+Authentication routes are mounted at `/api/auth` in `api/hono/src/routers/auth.ts`:
+
+```ts api/hono/src/routers/auth.ts
+export const authRouter = new Hono()
+  .get("/get-session", (c) => auth.handler(c.req.raw))
+  .on(["GET", "POST"], "/*", (c) => auth.handler(c.req.raw))
+```
+
+This provides all Better Auth endpoints including:
+
+- `/api/auth/sign-in` - Sign in with email/password
+- `/api/auth/sign-up` - Create new account
+- `/api/auth/sign-out` - Sign out current user
+- `/api/auth/callback/github` - GitHub OAuth callback
+- `/api/auth/callback/google` - Google OAuth callback
+- `/api/auth/get-session` - Get current session
+- `/api/auth/reference` - Better Auth OpenAPI documentation
+
+## Organization & Team Support
+
+The organization plugin enables multi-tenant features:
+
+```ts
+organizationPlugin({
+  teams: { enabled: true },
+})
+```
+
+This provides:
+
+- Organization creation and management
+- Team-based access control
+- Member invitations
+- Role-based permissions
+
+<Note>
+  The database schema includes `organization`, `member`, `team`, `teamMember`, and `invitation` tables to support these features.
+</Note>
+
+## Protected Routes
+
+Use the auth middleware to protect API routes:
+
+```ts api/hono/src/routers/v1.ts
+import { authMiddleware } from "@/middlewares"
+
+export const v1Router = new Hono<{
+  Variables: Session
+}>()
+  .use("/*", authMiddleware)
+  .get("/session", (c) => {
+    const session = c.get("session")
+    return c.json({ data: session })
+  })
+  .get("/user", (c) => {
+    const user = c.get("user")
+    return c.json({ data: user })
+  })
+```
+
+## Resources
+
+- [Better Auth Documentation](https://www.better-auth.com/docs)
+- [Better Auth Plugins](https://www.better-auth.com/docs/plugins)
+- [GitHub OAuth Apps](https://docs.github.com/en/apps/oauth-apps)
+- [Google OAuth 2.0](https://developers.google.com/identity/protocols/oauth2)

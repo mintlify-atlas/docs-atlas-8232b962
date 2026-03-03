@@ -1,0 +1,290 @@
+---
+title: Monorepo Architecture
+description: Understanding ZeroStarter's monorepo structure with Turborepo and workspace management
+---
+
+ZeroStarter uses a monorepo architecture powered by Turborepo and Bun workspaces, organizing code into logical packages for better code sharing and faster builds.
+
+## Workspace Structure
+
+The project is organized into three main workspace categories:
+
+```
+zerostarter/
+├── api/           # Backend applications
+│   └── hono/      # Hono API server
+├── packages/      # Shared packages
+│   ├── auth/      # Better Auth configuration
+│   ├── db/        # Drizzle ORM and schemas
+│   ├── env/       # Environment validation
+│   └── tsconfig/  # Shared TypeScript configs
+└── web/           # Frontend applications
+    └── next/      # Next.js web app
+```
+
+### Workspace Configuration
+
+Workspaces are defined in the root `package.json`:
+
+```json title="package.json"
+{
+  "workspaces": [
+    "api/*",
+    "packages/*",
+    "web/*"
+  ]
+}
+```
+
+This allows packages to reference each other using the `workspace:*` protocol:
+
+```json title="api/hono/package.json"
+{
+  "dependencies": {
+    "@packages/auth": "workspace:*",
+    "@packages/env": "workspace:*"
+  }
+}
+```
+
+## Turborepo Configuration
+
+Turborepo manages task execution with intelligent caching and dependency awareness.
+
+### Build Pipeline
+
+The `turbo.json` configuration defines task dependencies:
+
+```json title="turbo.json"
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
+<Note>
+The `^build` syntax means "build all dependencies first" before building the current package.
+</Note>
+
+### Global Environment Variables
+
+Turborepo is aware of environment variables that affect builds:
+
+```json title="turbo.json"
+{
+  "globalEnv": [
+    "NODE_ENV",
+    "BETTER_AUTH_SECRET",
+    "POSTGRES_URL",
+    "NEXT_PUBLIC_API_URL"
+  ]
+}
+```
+
+## Package Organization
+
+### API Packages
+
+**@api/hono** - The main API server built with Hono
+
+```json title="api/hono/package.json"
+{
+  "name": "@api/hono",
+  "type": "module",
+  "exports": "./dist/index.mjs",
+  "scripts": {
+    "dev": "concurrently \"tsdown --watch\" \"bun --hot src/index.ts\"",
+    "build": "tsdown",
+    "start": "bun dist/index.mjs"
+  }
+}
+```
+
+### Shared Packages
+
+**@packages/auth** - Better Auth configuration and types
+
+```json title="packages/auth/package.json"
+{
+  "name": "@packages/auth",
+  "exports": "./dist/index.mjs",
+  "dependencies": {
+    "@packages/db": "workspace:*",
+    "@packages/env": "workspace:*",
+    "better-auth": "catalog:"
+  }
+}
+```
+
+**@packages/db** - Database schema and Drizzle ORM client
+
+```json title="packages/db/package.json"
+{
+  "name": "@packages/db",
+  "exports": "./dist/index.mjs",
+  "dependencies": {
+    "@packages/env": "workspace:*",
+    "drizzle-orm": "catalog:"
+  }
+}
+```
+
+**@packages/env** - Environment variable validation with @t3-oss/env-core
+
+**@packages/tsconfig** - Shared TypeScript configurations
+
+### Web Packages
+
+**@web/next** - Next.js frontend application
+
+```json title="web/next/package.json"
+{
+  "name": "@web/next",
+  "dependencies": {
+    "@api/hono": "workspace:*",
+    "@packages/auth": "workspace:*",
+    "@packages/env": "workspace:*"
+  }
+}
+```
+
+## Common Tasks
+
+### Running Development Servers
+
+Start all workspaces in development mode:
+
+```bash
+bun dev
+```
+
+This runs with Turborepo's TUI for monitoring multiple services:
+- Next.js dev server (port 3000)
+- Hono API server (port 4000)
+
+### Building for Production
+
+Build all packages in the correct order:
+
+```bash
+bun build
+```
+
+Turborepo automatically:
+1. Builds `@packages/env` first
+2. Builds `@packages/db` and `@packages/auth`
+3. Builds `@api/hono` and `@web/next`
+
+### Database Commands
+
+Database tasks are scoped to the `@packages/db` workspace:
+
+```bash
+# Generate migrations
+bun db:generate
+
+# Apply migrations
+bun db:migrate
+
+# Open Drizzle Studio
+bun db:studio
+```
+
+These commands ensure `@packages/env` is built first before running database operations.
+
+## Dependency Management
+
+### Catalog Pattern
+
+ZeroStarter uses Bun's catalog feature to centralize dependency versions:
+
+```json title="package.json"
+{
+  "catalog": {
+    "hono": "^4.12.3",
+    "drizzle-orm": "^0.45.1",
+    "better-auth": "^1.5.1"
+  }
+}
+```
+
+Packages reference catalog versions:
+
+```json
+{
+  "dependencies": {
+    "hono": "catalog:"
+  }
+}
+```
+
+This ensures consistent versions across all workspaces.
+
+### Installing Dependencies
+
+Install dependencies from the root:
+
+```bash
+bun install
+```
+
+Add a dependency to a specific workspace:
+
+```bash
+bun add --cwd api/hono hono-openapi
+```
+
+## Type Safety Across Workspaces
+
+The monorepo enables end-to-end type safety:
+
+```typescript title="api/hono/src/index.ts"
+import { auth } from "@packages/auth"
+import { db } from "@packages/db"
+
+export type AppType = typeof routes
+```
+
+```typescript title="web/next/src/lib/api/client.ts"
+import type { AppType } from "@api/hono"
+import { hc } from "hono/client"
+
+const honoClient = hc<AppType>(url)
+export const apiClient = honoClient.api
+```
+
+The `AppType` from the API server provides full type safety in the frontend with zero code generation.
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Code Sharing" icon="share-nodes">
+    Share types, utilities, and configurations across frontend and backend
+  </Card>
+  <Card title="Incremental Builds" icon="bolt">
+    Turborepo only rebuilds changed packages and their dependents
+  </Card>
+  <Card title="Type Safety" icon="shield-check">
+    End-to-end TypeScript types from database to API to frontend
+  </Card>
+  <Card title="Single Version Control" icon="code-branch">
+    One repository, one version, easier collaboration
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+1. **Keep packages focused** - Each package should have a single responsibility
+2. **Use workspace protocol** - Always use `workspace:*` for internal dependencies
+3. **Leverage caching** - Turborepo caches task outputs for faster subsequent runs
+4. **Build before dev** - The `^build` dependency ensures packages are ready before dev mode
+5. **Centralize configs** - Use `@packages/tsconfig` for shared TypeScript settings
